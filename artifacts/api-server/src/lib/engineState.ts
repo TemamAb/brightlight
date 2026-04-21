@@ -18,6 +18,8 @@ export interface SharedEngineState {
   ipcConnected: boolean; // KPI 1: Rust Worker Link Status
   flashloanContractAddress: string | null; // Dynamically received from Rust core
   shadowModeActive: boolean; // BSS-26/38: Integrity-based safety gate
+  subsystemKpis: any[]; // Neural Feedback Panel data
+  bottleneckReport: any; // Bottleneck analysis data
 }
 
 export const sharedEngineState: SharedEngineState = {
@@ -34,4 +36,6 @@ export const sharedEngineState: SharedEngineState = {
   ipcConnected: false,
   flashloanContractAddress: null,
   shadowModeActive: false,
+  subsystemKpis: [],
+  bottleneckReport: null,
 };

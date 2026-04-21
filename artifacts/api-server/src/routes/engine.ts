@@ -9,7 +9,7 @@
  *
  * LIVE mode   : Requires PIMLICO_API_KEY + RPC_ENDPOINT set in Render env vars.
  *               Builds a real ERC-4337 UserOperation skeleton targeting the Pimlico
- *               bundler and paymaster. Actual atomic execution additionally requires 
+ *               bundler and paymaster. Actual atomic execution additionally requires
  *               FlashExecutor.sol deployed on the target chain.
  *
  * FREE-TIER CONSTRAINTS (public RPC):
@@ -32,10 +32,15 @@ import { settingsTable, streamEventsTable, tradesTable } from "@workspace/db";
 import crypto from "crypto";
 import { logger } from "../lib/logger";
 import { getEthPriceUsd } from "../lib/priceOracle";
-import { startBlockTracking, stopBlockTracking, fetchCurrentBlock, getBlockStats } from "../lib/blockTracker";
+import {
+  startBlockTracking,
+  stopBlockTracking,
+  fetchCurrentBlock,
+  getBlockStats,
+} from "../lib/blockTracker";
 import { scanForOpportunities } from "../lib/opportunityScanner";
 import { sharedEngineState } from "../lib/engineState";
-import { BrightSkyBribeEngine } from "../../../../bribe-engine";
+import { BrightSkyBribeEngine } from "../lib/bribeEngine";
 import * as net from "net";
 import { sql } from "drizzle-orm";
 import { alphaCopilot } from "../lib/alphaCopilot";
@@ -62,7 +67,7 @@ async function detectLiveCapability(): Promise<{
 }> {
   // KPI 19: Environment-first detection. Settings Hub now updates process.env directly.
   const pimlicoApiKey = process.env["PIMLICO_API_KEY"] ?? null;
-  const rpcEndpoint   = process.env["RPC_ENDPOINT"] ?? null;
+  const rpcEndpoint = process.env["RPC_ENDPOINT"] ?? null;
 
   const hasPimlicoKey = !!pimlicoApiKey;
   const hasPrivateRpc = !!rpcEndpoint;
@@ -76,12 +81,23 @@ async function detectLiveCapability(): Promise<{
       const res = await fetch(bundlerUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_supportedEntryPoints", params: [] }),
-        signal: AbortSignal.timeout(3000)
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_supportedEntryPoints",
+          params: [],
+        }),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) throw new Error("Bundler offline");
     } catch (e) {
-      return { hasPimlicoKey: false, hasPrivateRpc, pimlicoApiKey, rpcEndpoint, liveCapable: false };
+      return {
+        hasPimlicoKey: false,
+        hasPrivateRpc,
+        pimlicoApiKey,
+        rpcEndpoint,
+        liveCapable: false,
+      };
     }
   }
 
@@ -96,27 +112,27 @@ async function detectLiveCapability(): Promise<{
 
 // ─── Engine State ───────────────────────────────────────────────────────────────
 let engineState = {
-  running:                 false,
-  mode:                    "STOPPED" as "SHADOW" | "LIVE" | "STOPPED",
-  startedAt:               null as Date | null,
-  walletAddress:           null as string | null,
-  walletPrivateKey:        null as string | null,  // ephemeral session key (never persisted)
-  gaslessMode:             true,
-  pimlicoEnabled:          false,
-  scannerActive:           false,
-  pimlicoApiKey:           null as string | null,
-  rpcEndpoint:             null as string | null,
-  liveCapable:             false,
+  running: false,
+  mode: "STOPPED" as "SHADOW" | "LIVE" | "STOPPED",
+  startedAt: null as Date | null,
+  walletAddress: null as string | null,
+  walletPrivateKey: null as string | null, // ephemeral session key (never persisted)
+  gaslessMode: true,
+  pimlicoEnabled: false,
+  scannerActive: false,
+  pimlicoApiKey: null as string | null,
+  rpcEndpoint: null as string | null,
+  liveCapable: false,
   flashloanContractAddress: null as string | null, // Dynamically managed by Rust core
-  opportunitiesDetected:   0,
-  opportunitiesExecuted:   0,
-  chainId:                 parseInt(process.env["CHAIN_ID"] ?? "8453"),
-  scanConcurrency:         parseInt(process.env["SCAN_CONCURRENCY"] ?? "8"),
-  scanInFlight:            false,
-  skippedScanCycles:       0,
-  lastScanStartedAt:       null as Date | null,
-  lastScanCompletedAt:     null as Date | null,
-  circuitBreaker:          createCircuitBreakerState(),
+  opportunitiesDetected: 0,
+  opportunitiesExecuted: 0,
+  chainId: parseInt(process.env["CHAIN_ID"] ?? "8453"),
+  scanConcurrency: parseInt(process.env["SCAN_CONCURRENCY"] ?? "8"),
+  scanInFlight: false,
+  skippedScanCycles: 0,
+  lastScanStartedAt: null as Date | null,
+  lastScanCompletedAt: null as Date | null,
+  circuitBreaker: createCircuitBreakerState(),
 };
 
 let scannerInterval: ReturnType<typeof setInterval> | null = null;
@@ -133,7 +149,9 @@ function connectToRustBridge(retryCount = 0) {
   const maxRetries = 10;
 
   const socket = net.connect(socketPath, () => {
-    logger.info(`[BSS-03] Connected to Rust Telemetry Bridge via UDS: ${socketPath}`);
+    logger.info(
+      `[BSS-03] Connected to Rust Telemetry Bridge via UDS: ${socketPath}`,
+    );
     sharedEngineState.ipcConnected = true;
   });
 
@@ -147,18 +165,29 @@ function connectToRustBridge(retryCount = 0) {
       if (line) {
         try {
           const opp = JSON.parse(line);
-          if (opp.ref_price) sharedEngineState.lastBackbonePrice = opp.ref_price;
-          if (typeof opp.shadow_mode_active === "boolean") sharedEngineState.shadowModeActive = opp.shadow_mode_active;
-          if (opp.flashloan_contract_address) sharedEngineState.flashloanContractAddress = opp.flashloan_contract_address;
-          
+          if (opp.ref_price)
+            sharedEngineState.lastBackbonePrice = opp.ref_price;
+          if (typeof opp.shadow_mode_active === "boolean")
+            sharedEngineState.shadowModeActive = opp.shadow_mode_active;
+          if (opp.flashloan_contract_address)
+            sharedEngineState.flashloanContractAddress =
+              opp.flashloan_contract_address;
+
           const hops = opp.path ? opp.path.length : 2;
-          sharedEngineState.pathComplexity[hops] = (sharedEngineState.pathComplexity[hops] || 0) + 1;
-          sharedEngineState.chainLatencies[opp.chain_id] = Date.now() - (opp.timestamp * 1000);
+          sharedEngineState.pathComplexity[hops] =
+            (sharedEngineState.pathComplexity[hops] || 0) + 1;
+          sharedEngineState.chainLatencies[opp.chain_id] =
+            Date.now() - opp.timestamp * 1000;
 
           if (opp.spreadPct > 0.1) {
-            broadcastTelemetry("RUST_OPPORTUNITY", { ...opp, latency_ms: Date.now() - (opp.timestamp * 1000) });
+            broadcastTelemetry("RUST_OPPORTUNITY", {
+              ...opp,
+              latency_ms: Date.now() - opp.timestamp * 1000,
+            });
           }
-        } catch (e) { /* silent parse error */ }
+        } catch (e) {
+          /* silent parse error */
+        }
       }
       boundary = buffer.indexOf("\n");
     }
@@ -171,13 +200,17 @@ function connectToRustBridge(retryCount = 0) {
       logger.warn(`[BSS-03] IPC Bridge unavailable, retrying in ${delay}ms...`);
       setTimeout(() => connectToRustBridge(retryCount + 1), delay);
     } else {
-      logger.error("[BSS-03] IPC Bridge critical failure: Max retries exceeded.");
+      logger.error(
+        "[BSS-03] IPC Bridge critical failure: Max retries exceeded.",
+      );
     }
   });
 
   socket.on("end", () => {
     sharedEngineState.ipcConnected = false;
-    logger.warn("[BSS-03] Rust IPC Bridge disconnected. Attempting reconnect...");
+    logger.warn(
+      "[BSS-03] Rust IPC Bridge disconnected. Attempting reconnect...",
+    );
     connectToRustBridge(0);
   });
 }
@@ -199,7 +232,10 @@ function broadcastTelemetry(type: string, payload: any) {
   }
   // Avoid console/file log bloat for high-frequency RUST_OPPORTUNITY signals
   if (type !== "RUST_OPPORTUNITY") {
-    logger.info({ telemetryType: type, ...payload }, "Pushing WebSocket Telemetry");
+    logger.info(
+      { telemetryType: type, ...payload },
+      "Pushing WebSocket Telemetry",
+    );
   }
 }
 
@@ -207,9 +243,12 @@ function broadcastTelemetry(type: string, payload: any) {
 async function autoVaultProfits(profitEth: number, chainId: number) {
   const reserveRatio = 0.5; // Send 50% to Aave for yield compounding
   const vaultAmount = profitEth * reserveRatio;
-  
+
   if (vaultAmount > 0.001) {
-    logger.info({ vaultAmount, chainId }, "Auto-compounding: Transferring profit to Aave vault");
+    logger.info(
+      { vaultAmount, chainId },
+      "Auto-compounding: Transferring profit to Aave vault",
+    );
     // Implementation would call FlashExecutor.vault(amount)
   }
 }
@@ -218,7 +257,9 @@ async function autoVaultProfits(profitEth: number, chainId: number) {
 // Prevents unbounded stream_events growth on free-tier Postgres (512 MB limit).
 async function pruneStreamEvents() {
   try {
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(streamEventsTable);
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(streamEventsTable);
     const count = Number(countResult[0]?.count ?? 0);
     if (count > 500) {
       await db.execute(sql`
@@ -240,8 +281,13 @@ async function pruneStreamEvents() {
 async function _submitMevBundle(
   rpcEndpoint: string,
   signedTxs: string[],
-  blockNumber: number
-): Promise<{ success: boolean; bundleHash?: string; error?: string; txHash?: string }> {
+  blockNumber: number,
+): Promise<{
+  success: boolean;
+  bundleHash?: string;
+  error?: string;
+  txHash?: string;
+}> {
   try {
     const res = await fetch(rpcEndpoint, {
       method: "POST",
@@ -250,20 +296,34 @@ async function _submitMevBundle(
         jsonrpc: "2.0",
         id: 1,
         method: "eth_sendBundle",
-        params: [{ 
-          txs: signedTxs, 
-          blockNumber: "0x" + blockNumber.toString(16),
-          minTimestamp: 0,
-          maxTimestamp: Math.floor(Date.now() / 1000) + 60
-        }]
+        params: [
+          {
+            txs: signedTxs,
+            blockNumber: "0x" + blockNumber.toString(16),
+            minTimestamp: 0,
+            maxTimestamp: Math.floor(Date.now() / 1000) + 60,
+          },
+        ],
       }),
     });
-    
-    const data = await res.json() as { result?: { bundleHash: string }; error?: any };
-    const txHash = signedTxs[0] ? crypto.createHash('keccak256').update(Buffer.from(signedTxs[0].slice(2), 'hex')).digest('hex') : undefined;
-    
-    return data.result 
-      ? { success: true, bundleHash: data.result.bundleHash, txHash: `0x${txHash}` } 
+
+    const data = (await res.json()) as {
+      result?: { bundleHash: string };
+      error?: any;
+    };
+    const txHash = signedTxs[0]
+      ? crypto
+          .createHash("keccak256")
+          .update(Buffer.from(signedTxs[0].slice(2), "hex"))
+          .digest("hex")
+      : undefined;
+
+    return data.result
+      ? {
+          success: true,
+          bundleHash: data.result.bundleHash,
+          txHash: `0x${txHash}`,
+        }
       : { success: false, error: data.error?.message };
   } catch (err) {
     return { success: false, error: String(err) };
@@ -275,7 +335,7 @@ async function buildAndSubmitUserOp(
   rpcEndpoint: string,
   chainId: number,
   walletPrivateKey: string,
-  calldata: string  // encoded FlashExecutor.execute() calldata
+  calldata: string, // encoded FlashExecutor.execute() calldata
 ): Promise<{ txHash: string | null; success: boolean; error?: string }> {
   try {
     // Pimlico bundler URL — chain-specific endpoint
@@ -286,7 +346,7 @@ async function buildAndSubmitUserOp(
       137: "polygon",
       10: "optimism",
       56: "binance",
-      43114: "avalanche"
+      43114: "avalanche",
     };
     const chainName = chainMap[chainId] || "base";
     const bundlerUrl = `https://api.pimlico.io/v2/${chainName}/rpc?apikey=${pimlicoApiKey}`;
@@ -295,28 +355,47 @@ async function buildAndSubmitUserOp(
     const pingRes = await fetch(bundlerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_supportedEntryPoints", params: [] }),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_supportedEntryPoints",
+        params: [],
+      }),
       signal: AbortSignal.timeout(5000),
     });
 
     if (!pingRes.ok) {
-      return { txHash: null, success: false, error: "Pimlico bundler unreachable" };
+      return {
+        txHash: null,
+        success: false,
+        error: "Pimlico bundler unreachable",
+      };
     }
 
-    const pingData = await pingRes.json() as { result?: string[] };
+    const pingData = (await pingRes.json()) as { result?: string[] };
     const entryPoint = pingData.result?.[0];
     if (!entryPoint) {
-      return { txHash: null, success: false, error: "No entry point from bundler" };
+      return {
+        txHash: null,
+        success: false,
+        error: "No entry point from bundler",
+      };
     }
 
     // BSS-35 Stealth: Deterministic Smart Account Address
     // Prevents third-party detection by utilizing a session-unique ephemeral salt.
     const signer = new Wallet(walletPrivateKey);
-    const deterministicSalt = crypto.createHmac("sha256", walletPrivateKey).update("BSS-SESSION").digest("hex");
+    const deterministicSalt = crypto
+      .createHmac("sha256", walletPrivateKey)
+      .update("BSS-SESSION")
+      .digest("hex");
     // Note: Production derivation involves the SimpleAccountFactory.getAddress(owner, salt)
-    const sender = signer.address; 
+    const sender = signer.address;
 
-    logger.info({ chainName, sender }, "BSS-35: Dispatching Stealth UserOperation via Pimlico");
+    logger.info(
+      { chainName, sender },
+      "BSS-35: Dispatching Stealth UserOperation via Pimlico",
+    );
 
     // BSS-35: Account Abstraction Construction
     const userOperation = {
@@ -324,13 +403,13 @@ async function buildAndSubmitUserOp(
       nonce: "0x" + BigInt(engineState.opportunitiesExecuted).toString(16),
       initCode: "0x",
       callData: calldata,
-      callGasLimit: "0x7a120", 
-      verificationGasLimit: "0x30d40", 
+      callGasLimit: "0x7a120",
+      verificationGasLimit: "0x30d40",
       preVerificationGas: "0xc350",
-      maxFeePerGas: "0x3b9aca00", 
+      maxFeePerGas: "0x3b9aca00",
       maxPriorityFeePerGas: "0x3b9aca00",
       paymasterAndData: "0x",
-      signature: "0x"
+      signature: "0x",
     };
 
     // Request Gas Sponsorship from Pimlico Paymaster
@@ -341,34 +420,41 @@ async function buildAndSubmitUserOp(
         jsonrpc: "2.0",
         id: 1,
         method: "pm_sponsorUserOperation",
-        params: [userOperation, { entryPoint }]
+        params: [userOperation, { entryPoint }],
       }),
     });
 
-    const sponsorData = await sponsorRes.json() as { 
-      result?: { 
+    const sponsorData = (await sponsorRes.json()) as {
+      result?: {
         paymasterAndData: string;
         callGasLimit?: string;
         verificationGasLimit?: string;
         preVerificationGas?: string;
         maxFeePerGas?: string;
         maxPriorityFeePerGas?: string;
-      } 
+      };
     };
 
     if (sponsorData.result) {
       userOperation.paymasterAndData = sponsorData.result.paymasterAndData;
       // BSS-35: Override gas limits with values provided by the paymaster for 100% success rate
-      if (sponsorData.result.callGasLimit) userOperation.callGasLimit = sponsorData.result.callGasLimit;
-      if (sponsorData.result.verificationGasLimit) userOperation.verificationGasLimit = sponsorData.result.verificationGasLimit;
-      if (sponsorData.result.preVerificationGas) userOperation.preVerificationGas = sponsorData.result.preVerificationGas;
+      if (sponsorData.result.callGasLimit)
+        userOperation.callGasLimit = sponsorData.result.callGasLimit;
+      if (sponsorData.result.verificationGasLimit)
+        userOperation.verificationGasLimit =
+          sponsorData.result.verificationGasLimit;
+      if (sponsorData.result.preVerificationGas)
+        userOperation.preVerificationGas =
+          sponsorData.result.preVerificationGas;
     }
 
     // BSS-35: Sign the UserOperation using the ephemeral session key.
     // This is required for the EntryPoint to validate authorization for the $0 balance account.
-    // Note: In a production BSS-35 implementation, you would calculate the UserOp hash 
+    // Note: In a production BSS-35 implementation, you would calculate the UserOp hash
     // using the entryPoint address and chainId.
-    userOperation.signature = await signer.signMessage("BrightSky-Authorization-UserOp");
+    userOperation.signature = await signer.signMessage(
+      "BrightSky-Authorization-UserOp",
+    );
 
     const submitRes = await fetch(bundlerUrl, {
       method: "POST",
@@ -377,16 +463,19 @@ async function buildAndSubmitUserOp(
         jsonrpc: "2.0",
         id: 1,
         method: "eth_sendUserOperation",
-        params: [userOperation, entryPoint]
+        params: [userOperation, entryPoint],
       }),
     });
 
-    const submitData = await submitRes.json() as { result?: string, error?: { message: string } };
+    const submitData = (await submitRes.json()) as {
+      result?: string;
+      error?: { message: string };
+    };
 
     return {
       txHash: submitData.result || null,
       success: !!submitData.result,
-      error: submitData.error?.message
+      error: submitData.error?.message,
     };
   } catch (err) {
     return { txHash: null, success: false, error: String(err) };
@@ -397,7 +486,8 @@ async function buildAndSubmitUserOp(
 async function scanCycle() {
   if (engineState.scanInFlight) {
     const stats = getBlockStats();
-    const blockNumber = stats.currentBlock > 0 ? stats.currentBlock : 21_500_000;
+    const blockNumber =
+      stats.currentBlock > 0 ? stats.currentBlock : 21_500_000;
 
     engineState.skippedScanCycles += 1;
     logger.warn(
@@ -414,7 +504,10 @@ async function scanCycle() {
 
   // KPI 10: Risk Engine Auto-stop. If consecutive failures exceed 3, stop the engine.
   if (engineState.circuitBreaker.consecutiveFailures >= 3) {
-    logger.error({ failures: engineState.circuitBreaker.consecutiveFailures }, "Circuit breaker threshold reached (3+ failures).");
+    logger.error(
+      { failures: engineState.circuitBreaker.consecutiveFailures },
+      "Circuit breaker threshold reached (3+ failures).",
+    );
     await db.insert(streamEventsTable).values({
       id: genId("evt"),
       type: "SCANNING",
@@ -422,27 +515,30 @@ async function scanCycle() {
       blockNumber,
     });
     await stopEngineInternal();
-    broadcastTelemetry("ENGINE_CRITICAL_STOP", { failures: engineState.circuitBreaker.consecutiveFailures });
+    broadcastTelemetry("ENGINE_CRITICAL_STOP", {
+      failures: engineState.circuitBreaker.consecutiveFailures,
+    });
     return;
   }
 
   engineState.scanInFlight = true;
   engineState.lastScanStartedAt = new Date();
 
-  // Define target chains for parallel worker execution (Total: 11 chains)
+  // BSS-11: Global Multi-Chain Matrix
+  // Restored scanning for all 11 chains to detect cross-chain price inefficiencies.
   const targetChains = [
-    1,      // Ethereum
-    8453,   // Base
-    42161,  // Arbitrum
-    137,    // Polygon
-    10,     // Optimism
-    56,     // BSC
-    43114,  // Avalanche
-    59144,  // Linea
+    1, // Ethereum
+    8453, // Base
+    42161, // Arbitrum
+    137, // Polygon
+    10, // Optimism
+    56, // BSC
+    43114, // Avalanche
+    59144, // Linea
     534352, // Scroll
-    81457,  // Blast
-    324     // ZKSync Era
-  ]; 
+    81457, // Blast
+    324, // ZKSync Era
+  ];
 
   try {
     const settingsRows = await db.select().from(settingsTable).limit(1);
@@ -452,13 +548,17 @@ async function scanCycle() {
     const maxBribePct = parseFloat(settings?.maxBribePct ?? "5");
     const maxSlippagePct = parseFloat(settings?.maxSlippagePct ?? "0.5");
     const simulationMode = settings?.simulationMode ?? true;
-    const targetProtocols = (settings?.targetProtocols ?? "uniswap_v3,aave_v3,balancer")
+    const targetProtocols = (
+      settings?.targetProtocols ?? "uniswap_v3,aave_v3,balancer"
+    )
       .split(",")
       .map((protocol: any) => protocol.trim())
       .filter((protocol: any) => protocol.length > 0);
     const ethPrice = await getEthPriceUsd();
 
-    const activeChainIds = targetChains.filter(id => getBlockStats(id).currentBlock > 0);
+    const activeChainIds = targetChains.filter(
+      (id) => getBlockStats(id).currentBlock > 0,
+    );
 
     await db.insert(streamEventsTable).values({
       id: genId("evt"),
@@ -467,7 +567,10 @@ async function scanCycle() {
       blockNumber,
       protocol: null,
     });
-    logger.info({ chains: activeChainIds, blockNumber }, "Initiating multi-chain execution scan");
+    logger.info(
+      { chains: activeChainIds, blockNumber },
+      "Initiating multi-chain execution scan",
+    );
 
     const gate = checkExecutionGate(engineState.circuitBreaker);
     if (!gate.allowed) {
@@ -483,28 +586,30 @@ async function scanCycle() {
 
     // KPI 8: Multi-chain worker orchestration
     // Porting to parallel map to handle multi-chain scanning simultaneously
-    const oppResults = await Promise.all(targetChains.map(async (cid) => {
-      const chainBlock = getBlockStats(cid).currentBlock || blockNumber;
-      return scanForOpportunities(
-        flashLoanSizeEth,
-        minMarginPct,
-        chainBlock,
-        cid,
-        targetProtocols,
-      );
-    }));
+    const oppResults = await Promise.all(
+      targetChains.map(async (cid) => {
+        const chainBlock = getBlockStats(cid).currentBlock || blockNumber;
+        return scanForOpportunities(
+          flashLoanSizeEth,
+          minMarginPct,
+          chainBlock,
+          cid,
+          targetProtocols,
+        );
+      }),
+    );
 
     const opps = oppResults.flat();
     engineState.opportunitiesDetected += opps.length;
 
     for (const opp of opps) {
       await db.insert(streamEventsTable).values({
-        id:          genId("evt"),
-        type:        "DETECTED",
-        message:     `${opp.path.join("→")} [${opp.protocol}] spread ${opp.spreadPct.toFixed(4)}% | loan ${opp.recommendedLoanSizeEth.toFixed(2)} ETH | source:${opp.flash_source} | est +${opp.estProfitEth.toFixed(5)} ETH`,
+        id: genId("evt"),
+        type: "DETECTED",
+        message: `${opp.path.join("→")} [${opp.protocol}] spread ${opp.spreadPct.toFixed(4)}% | loan ${opp.recommendedLoanSizeEth.toFixed(2)} ETH | source:${opp.flash_source} | est +${opp.estProfitEth.toFixed(5)} ETH`,
         blockNumber,
-        protocol:    opp.protocol,
-        profit:      opp.estProfitEth.toString(),
+        protocol: opp.protocol,
+        profit: opp.estProfitEth.toString(),
       });
 
       broadcastTelemetry("OPPORTUNITY_DETECTED", { ...opp });
@@ -518,13 +623,15 @@ async function scanCycle() {
         ).toFixed(6),
       );
 
-      const bribeAnalysis = BrightSkyBribeEngine.calculateProtectedBribe(opp.estProfitEth);
+      const bribeAnalysis = BrightSkyBribeEngine.calculateProtectedBribe(
+        opp.estProfitEth,
+      );
 
       if (!bribeAnalysis.proceed) {
         await db.insert(streamEventsTable).values({
-          id:       genId("evt"),
-          type:     "SCANNING",
-          message:  `Skip: net margin ${bribeAnalysis.margin}% < gate ${minMarginPct}% | pair:${opp.tokenIn}/${opp.tokenOut}`,
+          id: genId("evt"),
+          type: "SCANNING",
+          message: `Skip: net margin ${bribeAnalysis.margin}% < gate ${minMarginPct}% | pair:${opp.tokenIn}/${opp.tokenOut}`,
           blockNumber,
           protocol: opp.protocol,
         });
@@ -552,14 +659,17 @@ async function scanCycle() {
       if (engineState.mode === "LIVE" && engineState.rpcEndpoint) {
         onChainSim = await simulateOnChain(
           engineState.rpcEndpoint,
-          sharedEngineState.flashloanContractAddress || "0x0000000000000000000000000000000000000000", // Use dynamic address
+          sharedEngineState.flashloanContractAddress ||
+            "0x0000000000000000000000000000000000000000", // Use dynamic address
           "0x", // Encoded data for execution
-          engineState.walletAddress!
+          engineState.walletAddress!,
         );
       }
 
       if ((simulationMode && !simulation.ok) || !onChainSim.success) {
-        const reason = !onChainSim.success ? `Revert: ${onChainSim.error}` : simulation.reason;
+        const reason = !onChainSim.success
+          ? `Revert: ${onChainSim.error}`
+          : simulation.reason;
         await db.insert(streamEventsTable).values({
           id: genId("evt"),
           type: "SCANNING",
@@ -570,7 +680,7 @@ async function scanCycle() {
         continue;
       }
 
-      const bribe     = bribeAnalysis.bribe;
+      const bribe = bribeAnalysis.bribe;
       const netProfit = simulationMode
         ? Math.min(bribeAnalysis.netProfit, simulation.estimatedNetProfitEth)
         : bribeAnalysis.netProfit;
@@ -581,102 +691,119 @@ async function scanCycle() {
       let txHash: string;
       let execMode: string;
 
-      if (engineState.mode === "LIVE" && engineState.liveCapable && engineState.pimlicoApiKey && engineState.rpcEndpoint) {
+      if (
+        engineState.mode === "LIVE" &&
+        engineState.liveCapable &&
+        engineState.pimlicoApiKey &&
+        engineState.rpcEndpoint
+      ) {
         // BSS-34: Encode call to FlashExecutor.execute(tokenIn, amount, path)
-        const calldata = "0xfe" + Buffer.from(opp.tokenIn).toString('hex'); 
-        const result   = await buildAndSubmitUserOp(
+        const calldata = "0xfe" + Buffer.from(opp.tokenIn).toString("hex");
+        const result = await buildAndSubmitUserOp(
           engineState.pimlicoApiKey,
           engineState.rpcEndpoint,
           engineState.chainId,
           engineState.walletPrivateKey!,
-          calldata
+          calldata,
         );
 
         if (result.success && result.txHash) {
-          txHash   = result.txHash;
+          txHash = result.txHash;
           execMode = "LIVE";
-          engineState.circuitBreaker = registerExecutionSuccess(engineState.circuitBreaker);
-          
+          engineState.circuitBreaker = registerExecutionSuccess(
+            engineState.circuitBreaker,
+          );
+
           // KPI 19: Elite Feedback Loop (Continual Optimization)
-          // Instead of static math, we apply a 2% 'Learning Delta' 
+          // Instead of static math, we apply a 2% 'Learning Delta'
           // If we win, we slightly lower the required margin to capture more volume.
           const currentTuning = BrightSkyBribeEngine.getTuning();
           const learningDelta = 0.02; // 2% adjustment per success
           BrightSkyBribeEngine.updateTuning({
-            MIN_MARGIN_RATIO: parseFloat(Math.max(0.10, currentTuning.MIN_MARGIN_RATIO * (1 - learningDelta)).toFixed(4)),
-            BRIBE_RATIO: parseFloat(Math.min(0.15, currentTuning.BRIBE_RATIO * (1 + learningDelta)).toFixed(4))
+            MIN_MARGIN_RATIO: parseFloat(
+              Math.max(
+                0.1,
+                currentTuning.MIN_MARGIN_RATIO * (1 - learningDelta),
+              ).toFixed(4),
+            ),
+            BRIBE_RATIO: parseFloat(
+              Math.min(
+                0.15,
+                currentTuning.BRIBE_RATIO * (1 + learningDelta),
+              ).toFixed(4),
+            ),
           });
 
           await autoVaultProfits(netProfit, engineState.chainId); // KPI 12
         } else {
           // Graceful fallback to shadow with reason logged
-          txHash   = "0x" + crypto.randomBytes(32).toString("hex");
+          txHash = "0x" + crypto.randomBytes(32).toString("hex");
           execMode = "LIVE_DEGRADED";
           engineState.circuitBreaker = registerExecutionFailure(
             engineState.circuitBreaker,
             result.error ?? "UserOp submission failed",
           );
           await db.insert(streamEventsTable).values({
-            id:       genId("evt"),
-            type:     "SCANNING",
-            message:  `[LIVE_DEGRADED] ${result.error ?? "UserOp submission failed"} — recording as SHADOW until FlashExecutor is deployed.`,
+            id: genId("evt"),
+            type: "SCANNING",
+            message: `[LIVE_DEGRADED] ${result.error ?? "UserOp submission failed"} — recording as SHADOW until FlashExecutor is deployed.`,
             blockNumber,
             protocol: opp.protocol,
           });
         }
       } else if (engineState.mode === "LIVE" && !engineState.liveCapable) {
-        txHash   = "0x" + crypto.randomBytes(32).toString("hex");
+        txHash = "0x" + crypto.randomBytes(32).toString("hex");
         execMode = "SHADOW";
         engineState.circuitBreaker = registerExecutionFailure(
           engineState.circuitBreaker,
           "LIVE mode requested without Pimlico or private RPC",
         );
         await db.insert(streamEventsTable).values({
-          id:       genId("evt"),
-          type:     "SCANNING",
-          message:  `[LIVE MODE BLOCKED] PIMLICO_API_KEY or RPC_ENDPOINT not set in Render env vars. Add them in Render Dashboard → Environment. Running SHADOW until configured.`,
+          id: genId("evt"),
+          type: "SCANNING",
+          message: `[LIVE MODE BLOCKED] PIMLICO_API_KEY or RPC_ENDPOINT not set in Render env vars. Add them in Render Dashboard → Environment. Running SHADOW until configured.`,
           blockNumber,
           protocol: opp.protocol,
         });
       } else {
-        txHash   = "0x" + crypto.randomBytes(32).toString("hex");
+        txHash = "0x" + crypto.randomBytes(32).toString("hex");
         execMode = "SHADOW";
       }
 
       const latencyMs = Date.now() - t0 + 40;
 
       await db.insert(streamEventsTable).values({
-        id:          genId("evt"),
-        type:        "BRIBED",
-        message:     `Builder bribe: ${bribe.toFixed(6)} ETH → block priority`,
+        id: genId("evt"),
+        type: "BRIBED",
+        message: `Builder bribe: ${bribe.toFixed(6)} ETH → block priority`,
         blockNumber,
-        protocol:    opp.protocol,
-        profit:      bribe.toString(),
+        protocol: opp.protocol,
+        profit: bribe.toString(),
       });
 
       await db.insert(streamEventsTable).values({
-        id:          genId("evt"),
-        type:        "EXECUTED",
-        message:     `[${execMode}] +${netProfit.toFixed(5)} ETH ($${profitUsd.toFixed(2)}) | ${txHash.slice(0, 10)}... | ${latencyMs}ms | gas:${gasStrategy.adjustedGasUnits.toLocaleString()} | urgency:${gasStrategy.urgencyBps}bps${simulationMode ? ` | simSlip:${simulation.simulatedSlippagePct.toFixed(3)}%` : ""}`,
+        id: genId("evt"),
+        type: "EXECUTED",
+        message: `[${execMode}] +${netProfit.toFixed(5)} ETH ($${profitUsd.toFixed(2)}) | ${txHash.slice(0, 10)}... | ${latencyMs}ms | gas:${gasStrategy.adjustedGasUnits.toLocaleString()} | urgency:${gasStrategy.urgencyBps}bps${simulationMode ? ` | simSlip:${simulation.simulatedSlippagePct.toFixed(3)}%` : ""}`,
         blockNumber,
         txHash,
-        protocol:    opp.protocol,
-        profit:      netProfit.toString(),
+        protocol: opp.protocol,
+        profit: netProfit.toString(),
       });
 
       await db.insert(tradesTable).values({
-        id:          genId("trd"),
-        status:      execMode === "LIVE" ? "EXECUTED" : "SHADOW",
-        tokenIn:     opp.tokenIn,
-        tokenOut:    opp.tokenOut,
-        amountIn:    opp.flashLoanSizeEth.toFixed(4),
-        profit:      netProfit.toFixed(8),
-        profitUsd:   profitUsd.toFixed(2),
-        bribePaid:   bribe.toFixed(8),
-        gasUsed:     gasStrategy.adjustedGasUnits,
+        id: genId("trd"),
+        status: execMode === "LIVE" ? "EXECUTED" : "SHADOW",
+        tokenIn: opp.tokenIn,
+        tokenOut: opp.tokenOut,
+        amountIn: opp.flashLoanSizeEth.toFixed(4),
+        profit: netProfit.toFixed(8),
+        profitUsd: profitUsd.toFixed(2),
+        bribePaid: bribe.toFixed(8),
+        gasUsed: gasStrategy.adjustedGasUnits,
         txHash,
-        protocol:    opp.protocol,
-        latencyMs:   latencyMs.toFixed(3),
+        protocol: opp.protocol,
+        latencyMs: latencyMs.toFixed(3),
         blockNumber,
       });
 
@@ -684,7 +811,7 @@ async function scanCycle() {
       broadcastTelemetry("TRADE_EXECUTED", {
         execMode,
         profit: netProfit,
-        txHash
+        txHash,
       });
     }
   } catch (err) {
@@ -711,16 +838,22 @@ router.get("/engine/copilot", async (_req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
-});/**
+}); /**
  * KPI 12: Vault Withdrawal Management
  */
 router.post("/vault/withdraw", async (req, res) => {
   const { amount, address, chainId, mode } = req.body;
   try {
-    logger.info({ amount, address, chainId, mode }, "Vault withdrawal sequence initiated");
+    logger.info(
+      { amount, address, chainId, mode },
+      "Vault withdrawal sequence initiated",
+    );
     // Logic to call FlashExecutor.vaultWithdrawal(amount, address)
     // and record transfer history in DB
-    res.json({ success: true, message: `Withdrawal of ${amount} ETH initiated to ${address}` });
+    res.json({
+      success: true,
+      message: `Withdrawal of ${amount} ETH initiated to ${address}`,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
@@ -732,74 +865,81 @@ router.get("/engine/status", async (_req, res) => {
     : 0;
 
   res.json({
-    running:               engineState.running,
-    mode:                  engineState.mode,
+    running: engineState.running,
+    mode: engineState.mode,
     uptime,
-    walletAddress:         engineState.walletAddress,
-    gaslessMode:           engineState.gaslessMode,
-    pimlicoEnabled:        engineState.pimlicoEnabled,
-    scannerActive:         engineState.scannerActive,
-    liveCapable:           engineState.liveCapable,
+    walletAddress: engineState.walletAddress,
+    gaslessMode: engineState.gaslessMode,
+    pimlicoEnabled: engineState.pimlicoEnabled,
+    scannerActive: engineState.scannerActive,
+    liveCapable: engineState.liveCapable,
     opportunitiesDetected: engineState.opportunitiesDetected,
     opportunitiesExecuted: engineState.opportunitiesExecuted,
-    chainId:               engineState.chainId,
-    ipcConnected:          sharedEngineState.ipcConnected,
-    shadowModeActive:      sharedEngineState.shadowModeActive,
+    chainId: engineState.chainId,
+    ipcConnected: sharedEngineState.ipcConnected,
+    shadowModeActive: sharedEngineState.shadowModeActive,
     flashloanContractAddress: sharedEngineState.flashloanContractAddress,
-    scanInFlight:          engineState.scanInFlight,
-    skippedScanCycles:     engineState.skippedScanCycles,
-    circuitBreakerOpen:    Boolean(
+    scanInFlight: engineState.scanInFlight,
+    skippedScanCycles: engineState.skippedScanCycles,
+    circuitBreakerOpen: Boolean(
       engineState.circuitBreaker.blockedUntil &&
       engineState.circuitBreaker.blockedUntil > Date.now(),
     ),
-    consecutiveFailures:   engineState.circuitBreaker.consecutiveFailures,
-    circuitBreakerUntil:   engineState.circuitBreaker.blockedUntil,
-    lastFailureReason:     engineState.circuitBreaker.lastFailureReason,
+    consecutiveFailures: engineState.circuitBreaker.consecutiveFailures,
+    circuitBreakerUntil: engineState.circuitBreaker.blockedUntil,
+    lastFailureReason: engineState.circuitBreaker.lastFailureReason,
   });
 });
 
 router.post("/engine/start", async (req, res) => {
   if (engineState.running) {
-    res.json({ success: false, message: "Engine already running.", mode: engineState.mode });
+    res.json({
+      success: false,
+      message: "Engine already running.",
+      mode: engineState.mode,
+    });
     return;
   }
 
-  const defaultMode = process.env.PAPER_TRADING_MODE === "false" ? "LIVE" : "SHADOW";
+  const defaultMode =
+    process.env.PAPER_TRADING_MODE === "false" ? "LIVE" : "SHADOW";
   const mode = req.body.mode ?? defaultMode;
   const { address, privateKey } = generateEphemeralWallet();
 
   // Detect live capability — reads from env vars first, then DB
   const caps = await detectLiveCapability();
 
-  engineState.running               = true;
-  engineState.mode                  = mode;
-  engineState.startedAt             = new Date();
-  engineState.walletAddress         = address;
-  engineState.walletPrivateKey      = privateKey;
-  engineState.scannerActive         = true;
-  engineState.pimlicoEnabled        = caps.hasPimlicoKey;
-  engineState.liveCapable           = caps.liveCapable;
-  engineState.pimlicoApiKey         = caps.pimlicoApiKey;
-  engineState.rpcEndpoint           = caps.rpcEndpoint;
+  engineState.running = true;
+  engineState.mode = mode;
+  engineState.startedAt = new Date();
+  engineState.walletAddress = address;
+  engineState.walletPrivateKey = privateKey;
+  engineState.scannerActive = true;
+  engineState.pimlicoEnabled = caps.hasPimlicoKey;
+  engineState.liveCapable = caps.liveCapable;
+  engineState.pimlicoApiKey = caps.pimlicoApiKey;
+  engineState.rpcEndpoint = caps.rpcEndpoint;
   engineState.opportunitiesDetected = 0;
-  engineState.flashloanContractAddress = sharedEngineState.flashloanContractAddress; // Sync from shared state
+  engineState.flashloanContractAddress =
+    sharedEngineState.flashloanContractAddress; // Sync from shared state
   engineState.opportunitiesExecuted = 0;
-  engineState.gaslessMode           = true;
-  engineState.scanInFlight          = false;
-  engineState.skippedScanCycles     = 0;
-  engineState.lastScanStartedAt     = null;
-  engineState.lastScanCompletedAt   = null;
-  engineState.circuitBreaker        = createCircuitBreakerState();
+  engineState.gaslessMode = true;
+  engineState.scanInFlight = false;
+  engineState.skippedScanCycles = 0;
+  engineState.lastScanStartedAt = null;
+  engineState.lastScanCompletedAt = null;
+  engineState.circuitBreaker = createCircuitBreakerState();
 
   // Sync to shared state (used by wallet + telemetry routes)
-  sharedEngineState.running        = true;
-  sharedEngineState.mode           = mode as "SHADOW" | "LIVE" | "STOPPED";
-  sharedEngineState.walletAddress  = address;
-  sharedEngineState.liveCapable    = caps.liveCapable;
-  sharedEngineState.flashloanContractAddress = engineState.flashloanContractAddress; // Ensure shared state is updated
+  sharedEngineState.running = true;
+  sharedEngineState.mode = mode as "SHADOW" | "LIVE" | "STOPPED";
+  sharedEngineState.walletAddress = address;
+  sharedEngineState.liveCapable = caps.liveCapable;
+  sharedEngineState.flashloanContractAddress =
+    engineState.flashloanContractAddress; // Ensure shared state is updated
   sharedEngineState.pimlicoEnabled = caps.hasPimlicoKey;
-  sharedEngineState.gaslessMode    = true;
-  sharedEngineState.startedAt      = engineState.startedAt;
+  sharedEngineState.gaslessMode = true;
+  sharedEngineState.startedAt = engineState.startedAt;
 
   startBlockTracking();
 
@@ -811,39 +951,43 @@ router.post("/engine/start", async (req, res) => {
   const capabilityMsg = caps.liveCapable
     ? `LIVE capable [Pimlico ✓ + RPC ✓] — deploying UserOps on chain:${engineState.chainId}`
     : caps.hasPimlicoKey
-    ? `SHADOW: Pimlico key found but no private RPC endpoint. Add RPC_ENDPOINT in Render env.`
-    : `SHADOW: No PIMLICO_API_KEY in env. Add keys in Render Dashboard → Environment to unlock LIVE.`;
+      ? `SHADOW: Pimlico key found but no private RPC endpoint. Add RPC_ENDPOINT in Render env.`
+      : `SHADOW: No PIMLICO_API_KEY in env. Add keys in Render Dashboard → Environment to unlock LIVE.`;
 
   await db.insert(streamEventsTable).values({
-    id:          genId("evt"),
-    type:        "SCANNING",
-    message:     `Engine [${mode}] | Wallet: ${address.slice(0, 10)}... | Block: #${currentBlock.toLocaleString()} | ETH: $${ethPrice.toFixed(0)} | ${capabilityMsg}`,
+    id: genId("evt"),
+    type: "SCANNING",
+    message: `Engine [${mode}] | Wallet: ${address.slice(0, 10)}... | Block: #${currentBlock.toLocaleString()} | ETH: $${ethPrice.toFixed(0)} | ${capabilityMsg}`,
     blockNumber: currentBlock,
-    protocol:    null,
+    protocol: null,
   });
 
   // Scan every 12s (Ethereum block time). Base finalizes faster but 12s is safe.
-  scannerInterval  = setInterval(scanCycle, 12_000);
+  scannerInterval = setInterval(scanCycle, 12_000);
   // Prune stream_events every 5 minutes (Render free-tier Postgres ~512 MB)
-  cleanupInterval  = setInterval(pruneStreamEvents, 5 * 60_000);
+  cleanupInterval = setInterval(pruneStreamEvents, 5 * 60_000);
 
   res.json({
-    success:       true,
-    message:       `Engine started in ${mode} mode. Wallet: ${address}`,
+    success: true,
+    message: `Engine started in ${mode} mode. Wallet: ${address}`,
     mode,
     walletAddress: address,
-    liveCapable:   caps.liveCapable,
-    pimlicoReady:  caps.hasPimlicoKey,
-    rpcReady:      caps.hasPrivateRpc,
-    chainId:       engineState.chainId,
+    liveCapable: caps.liveCapable,
+    pimlicoReady: caps.hasPimlicoKey,
+    rpcReady: caps.hasPrivateRpc,
+    chainId: engineState.chainId,
     currentBlock,
-    ethPriceUsd:   ethPrice,
+    ethPriceUsd: ethPrice,
   });
 });
 
 router.post("/engine/stop", async (_req, res) => {
   const success = await stopEngineInternal();
-  res.json({ success, message: success ? "Engine stopped." : "Engine not running.", mode: "STOPPED" });
+  res.json({
+    success,
+    message: success ? "Engine stopped." : "Engine not running.",
+    mode: "STOPPED",
+  });
 });
 
 async function stopEngineInternal(): Promise<boolean> {
@@ -851,32 +995,38 @@ async function stopEngineInternal(): Promise<boolean> {
     return false;
   }
 
-  if (scannerInterval)  { clearInterval(scannerInterval);  scannerInterval  = null; }
-  if (cleanupInterval)  { clearInterval(cleanupInterval);  cleanupInterval  = null; }
+  if (scannerInterval) {
+    clearInterval(scannerInterval);
+    scannerInterval = null;
+  }
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
   stopBlockTracking();
 
   await db.insert(streamEventsTable).values({
-    id:          genId("evt"),
-    type:        "SCANNING",
-    message:     `Engine stopped. Session: ${engineState.opportunitiesDetected} detected, ${engineState.opportunitiesExecuted} executed [${engineState.mode}].`,
+    id: genId("evt"),
+    type: "SCANNING",
+    message: `Engine stopped. Session: ${engineState.opportunitiesDetected} detected, ${engineState.opportunitiesExecuted} executed [${engineState.mode}].`,
     blockNumber: null,
-    protocol:    null,
+    protocol: null,
   });
 
-  engineState.running          = false;
-  engineState.mode             = "STOPPED";
-  engineState.startedAt        = null;
-  engineState.scannerActive    = false;
-  engineState.walletPrivateKey = null;   // zero out session key on stop
-  engineState.pimlicoApiKey    = null;   // zero out key reference on stop
-  engineState.rpcEndpoint      = null;
-  engineState.scanInFlight     = false;
+  engineState.running = false;
+  engineState.mode = "STOPPED";
+  engineState.startedAt = null;
+  engineState.scannerActive = false;
+  engineState.walletPrivateKey = null; // zero out session key on stop
+  engineState.pimlicoApiKey = null; // zero out key reference on stop
+  engineState.rpcEndpoint = null;
+  engineState.scanInFlight = false;
   engineState.lastScanStartedAt = null;
   engineState.lastScanCompletedAt = null;
-  engineState.circuitBreaker   = createCircuitBreakerState();
+  engineState.circuitBreaker = createCircuitBreakerState();
 
-  sharedEngineState.running   = false;
-  sharedEngineState.mode      = "STOPPED";
+  sharedEngineState.running = false;
+  sharedEngineState.mode = "STOPPED";
   sharedEngineState.startedAt = null;
 
   return true;
