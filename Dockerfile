@@ -1,5 +1,11 @@
 # ─── STAGE 1: RUST PLANNER (Cargo Chef) ───────────────────────────────────────
 FROM rust:1.82-slim-bookworm AS chef
+
+# BSS-37: Install build dependencies required for cargo-chef and solver compilation
+RUN apt-get update && apt-get install -y \
+    pkg-config libssl-dev build-essential cmake ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -11,11 +17,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ─── STAGE 3: RUST BUILDER ────────────────────────────────────────────────────
 FROM chef AS rust-builder
 COPY --from=planner /app/recipe.json recipe.json
-
-# BSS-37: Install build dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config libssl-dev build-essential cmake ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 
 # Build dependencies (cached layer)
 ENV CARGO_BUILD_JOBS=1
