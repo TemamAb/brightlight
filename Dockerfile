@@ -10,7 +10,7 @@ FROM node:22.12-alpine AS pnpm-builder
 ENV CI=true
 RUN apk add --no-cache git bash python3 build-base
 WORKDIR /app
-RUN npm install -g pnpm@8
+RUN npm install -g pnpm@latest
 COPY package.json pnpm-workspace.yaml .npmrc ./
 RUN pnpm install
 COPY lib lib/
