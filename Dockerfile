@@ -11,7 +11,7 @@ ENV CI=true
 RUN apk add --no-cache git bash
 WORKDIR /app
 RUN npm install -g pnpm@9
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-workspace.yaml .npmrc ./
 RUN pnpm install
 COPY lib lib/
 COPY artifacts/api-server artifacts/api-server/
