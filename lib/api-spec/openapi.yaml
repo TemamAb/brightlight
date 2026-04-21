@@ -1,0 +1,545 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: BrightSky Elite - Flash Loan Arbitrage Engine API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: engine
+    description: Arbitrage engine control
+  - name: trades
+    description: Trade execution history
+  - name: wallet
+    description: Wallet and vault management
+  - name: settings
+    description: System configuration
+  - name: telemetry
+    description: Performance telemetry and metrics
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /engine/status:
+    get:
+      operationId: getEngineStatus
+      tags: [engine]
+      summary: Get engine status
+      description: Returns current engine state and mode
+      responses:
+        "200":
+          description: Engine status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineStatus"
+
+  /engine/start:
+    post:
+      operationId: startEngine
+      tags: [engine]
+      summary: Start arbitrage engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartEngineRequest"
+      responses:
+        "200":
+          description: Engine started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineActionResult"
+
+  /engine/stop:
+    post:
+      operationId: stopEngine
+      tags: [engine]
+      summary: Stop arbitrage engine
+      responses:
+        "200":
+          description: Engine stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineActionResult"
+
+  /trades:
+    get:
+      operationId: listTrades
+      tags: [trades]
+      summary: List trade executions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, EXECUTED, FAILED, REVERTED]
+      responses:
+        "200":
+          description: Trade list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeListResponse"
+
+  /trades/summary:
+    get:
+      operationId: getTradeSummary
+      tags: [trades]
+      summary: Get trade profit summary
+      description: Returns total profit, win rate, and trade volume aggregates
+      responses:
+        "200":
+          description: Trade summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeSummary"
+
+  /trades/stream:
+    get:
+      operationId: getTradeStream
+      tags: [trades]
+      summary: Get live blockchain event stream
+      description: Returns recent scanning and execution events
+      responses:
+        "200":
+          description: Stream events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamEventsResponse"
+
+  /wallet:
+    get:
+      operationId: getWallet
+      tags: [wallet]
+      summary: Get wallet and vault info
+      responses:
+        "200":
+          description: Wallet info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletInfo"
+
+  /wallet/config:
+    put:
+      operationId: updateWalletConfig
+      tags: [wallet]
+      summary: Update wallet config (RPC, private key)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletConfigBody"
+      responses:
+        "200":
+          description: Config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+  /telemetry:
+    get:
+      operationId: getTelemetry
+      tags: [telemetry]
+      summary: Get system telemetry metrics
+      description: Returns session profit, trades per hour, p99 latency
+      responses:
+        "200":
+          description: Telemetry data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryData"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get system settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemSettings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update system settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    EngineStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        mode:
+          type: string
+          enum: [SHADOW, LIVE, STOPPED]
+        uptime:
+          type: integer
+          description: Seconds engine has been running
+        walletAddress:
+          type: string
+        gaslessMode:
+          type: boolean
+        pimlicoEnabled:
+          type: boolean
+        scannerActive:
+          type: boolean
+      required:
+        - running
+        - mode
+        - gaslessMode
+        - pimlicoEnabled
+        - scannerActive
+
+    StartEngineRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [SHADOW, LIVE]
+          default: SHADOW
+        flashLoanSize:
+          type: number
+          description: Flash loan size in ETH
+        minMarginPct:
+          type: number
+          description: Minimum profit margin percentage
+      required:
+        - mode
+
+    EngineActionResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        mode:
+          type: string
+      required:
+        - success
+        - message
+
+    Trade:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [PENDING, EXECUTED, FAILED, REVERTED]
+        tokenIn:
+          type: string
+        tokenOut:
+          type: string
+        amountIn:
+          type: string
+        profit:
+          type: number
+        profitUsd:
+          type: number
+        bribePaid:
+          type: number
+        gasUsed:
+          type: integer
+        txHash:
+          type: string
+        protocol:
+          type: string
+        latencyMs:
+          type: number
+        blockNumber:
+          type: integer
+      required:
+        - id
+        - timestamp
+        - status
+        - profit
+
+    TradeListResponse:
+      type: object
+      properties:
+        trades:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trade"
+        total:
+          type: integer
+      required:
+        - trades
+        - total
+
+    TradeSummary:
+      type: object
+      properties:
+        totalProfitEth:
+          type: number
+        totalProfitUsd:
+          type: number
+        totalTrades:
+          type: integer
+        successRate:
+          type: number
+        avgProfitPerTrade:
+          type: number
+        sessionProfitEth:
+          type: number
+        sessionProfitUsd:
+          type: number
+        tradesPerHour:
+          type: number
+        topProtocol:
+          type: string
+        totalBribesPaid:
+          type: number
+      required:
+        - totalProfitEth
+        - totalProfitUsd
+        - totalTrades
+        - successRate
+        - sessionProfitEth
+        - sessionProfitUsd
+        - tradesPerHour
+
+    StreamEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [SCANNING, DETECTED, BRIBED, EXECUTED, FAILED, REVERTED]
+        message:
+          type: string
+        profit:
+          type: number
+        txHash:
+          type: string
+        blockNumber:
+          type: integer
+        protocol:
+          type: string
+      required:
+        - id
+        - timestamp
+        - type
+        - message
+
+    StreamEventsResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/StreamEvent"
+      required:
+        - events
+
+    WalletInfo:
+      type: object
+      properties:
+        address:
+          type: string
+        balanceEth:
+          type: number
+        balanceUsd:
+          type: number
+        sweepMode:
+          type: string
+          enum: [AUTO_SWEEP, MANUAL_CLAIM]
+        pimlicoApiKey:
+          type: string
+          description: Masked API key
+        rpcEndpoint:
+          type: string
+          description: Masked RPC endpoint
+        gaslessEnabled:
+          type: boolean
+      required:
+        - gaslessEnabled
+        - sweepMode
+
+    WalletConfigBody:
+      type: object
+      properties:
+        rpcEndpoint:
+          type: string
+        privateKey:
+          type: string
+        pimlicoApiKey:
+          type: string
+        sweepMode:
+          type: string
+          enum: [AUTO_SWEEP, MANUAL_CLAIM]
+
+    TelemetryData:
+      type: object
+      properties:
+        sessionProfitEth:
+          type: number
+        sessionProfitUsd:
+          type: number
+        tradesPerHour:
+          type: number
+        p99LatencyUs:
+          type: number
+        avgLatencyUs:
+          type: number
+        memoryUsageMb:
+          type: number
+        cpuPercent:
+          type: number
+        blocksScanned:
+          type: integer
+        opportunitiesDetected:
+          type: integer
+        opportunitiesExecuted:
+          type: integer
+        uptimeSeconds:
+          type: integer
+        profitHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfitPoint"
+      required:
+        - sessionProfitEth
+        - sessionProfitUsd
+        - tradesPerHour
+        - p99LatencyUs
+
+    ProfitPoint:
+      type: object
+      properties:
+        time:
+          type: string
+        eth:
+          type: number
+        usd:
+          type: number
+      required:
+        - time
+        - eth
+        - usd
+
+    SystemSettings:
+      type: object
+      properties:
+        flashLoanSizeEth:
+          type: number
+        minMarginPct:
+          type: number
+        maxBribePct:
+          type: number
+        simulationMode:
+          type: boolean
+        targetProtocols:
+          type: array
+          items:
+            type: string
+        maxSlippagePct:
+          type: number
+        openaiApiKey:
+          type: string
+          description: Masked key
+        pimlicoApiKey:
+          type: string
+          description: Masked key
+      required:
+        - flashLoanSizeEth
+        - minMarginPct
+        - maxBribePct
+        - simulationMode
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        flashLoanSizeEth:
+          type: number
+        minMarginPct:
+          type: number
+        maxBribePct:
+          type: number
+        simulationMode:
+          type: boolean
+        targetProtocols:
+          type: array
+          items:
+            type: string
+        maxSlippagePct:
+          type: number
+        openaiApiKey:
+          type: string
+        pimlicoApiKey:
+          type: string
+
+    OperationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message

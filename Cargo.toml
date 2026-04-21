@@ -1,0 +1,29 @@
+[package]
+name = "rust-backbone"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rust-backbone"
+path = "main.rs"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+ethers = { version = "2.0", features = ["abigen", "rustls", "ipc"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+dotenv = "0.15"
+eyre = "0.6"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+ethers-flashbots = { git = "https://github.com/onbjerg/ethers-flashbots", rev = "3a43e58" }
+petgraph = "0.6"
+rayon = "1.7"
+
+[profile.release]
+opt-level = 3
+lto = true          # Enable Link Time Optimization for best runtime performance
+codegen-units = 1   # Maximize optimization across the entire crate
+panic = "abort"    # Remove stack unwinding for a smaller/faster binary
+incremental = false

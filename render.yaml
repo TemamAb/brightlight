@@ -1,0 +1,174 @@
+services:
+  # ─── API Server (Node.js Web Service) ────────────────────────────────────────
+  - type: web
+    name: brightlight-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerContext: .
+    dockerfilePath: Dockerfile
+    # CRITICAL: Wait for database to be fully provisioned before starting
+    dependsOn:
+      - database: brightlight-db
+    # Build: install deps, then compile ONLY the api-server bundle.
+    # @workspace/db, @workspace/api-zod are consumed as TypeScript source —
+    # esbuild bundles them in. No separate build step needed for those packages.
+    # CRITICAL: Push Drizzle schema BEFORE the server starts.
+    # On a fresh Render Postgres, tables don't exist — every API call fails
+    # with "relation does not exist" without this step.
+    # Uses the `push` script in lib/db/package.json (drizzle-kit push).
+    # Audit Fix: Removed redundant pnpm install to speed up deployment.
+    preDeployCommand: pnpm --filter @workspace/db run push
+    # Render polls this path to know when the service is ready.
+    # Without a matching route, Render marks the service as unhealthy → restart loop.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: PNPM_VERSION
+        value: "9"
+      - key: PORT
+        value: "3000"
+      - key: DASHBOARD_USER
+        value: admin
+      - key: DASHBOARD_PASS
+        value: alphamark2026
+      - key: REDIS_URL
+        value: redis://localhost:6379
+      - key: DATABASE_URL
+        fromDatabase: { name: brightlight-db, property: connectionString }
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      # ── Set these in Render Dashboard → brightsky-api → Environment ───────
+      # Pimlico API key — required for LIVE ERC-4337 gasless UserOps.
+      # Format: pim_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+      - key: PIMLICO_API_KEY
+        sync: false
+      # Private RPC endpoint — required for live bundle submission.
+      # Example: https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
+      # Public Cloudflare/Ankr RPCs block eth_sendRawTransaction for MEV.
+      - key: RPC_ENDPOINT
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: WALLET_ADDRESS
+        sync: false
+      - key: DEPLOYER_ADDRESS
+        value: "0x748Aa8ee067585F5bd02f0988eF6E71f2d662751"
+      - key: FLASHLOAN_CONTRACT_ADDRESS
+        value: "0x0000000000000000000000000000000000000000"
+      - key: ETH_RPC_URL
+        value: https://lb.drpc.live/ethereum/AlkT_OfN6UnklsftckUk8anFYye2M-IR8bIerh0xYKQB
+      - key: BASE_RPC_URL
+        value: https://mainnet.base.org
+      - key: POLYGON_RPC_URL
+        value: https://polygon-mainnet.infura.io/v3/264da6b977804b3880d76c0fe2ac8213
+      - key: SOLANA_RPC_URL
+        value: https://solana-mainnet.g.alchemy.com/v2/mK2nj6ZSi1mZ2THJMUHcF
+      - key: BSC_RPC_URL
+        value: https://bsc-dataseed1.binance.org
+      - key: ARBITRUM_RPC_URL
+        value: https://arb1.arbitrum.io/rpc
+      - key: OPTIMISM_RPC_URL
+        value: https://mainnet.optimism.io
+      - key: AVALANCHE_RPC_URL
+        value: https://api.avax.network/ext/bc/C/rpc
+      - key: ALCHEMY_RPC_URL
+        sync: false
+      - key: MAX_PAIRS_TO_SCAN
+        value: "1000"
+      - key: PAPER_TRADING_MODE
+        value: "false"
+      - key: MEV_PROTECTION
+        value: "true"
+      - key: FLASH_LOAN_MAX
+        value: "100000000"
+      # Optional: Alchemy key for enhanced block subscription (eth_subscribe)
+      - key: ALCHEMY_API_KEY
+        sync: false
+      # AI & Account Abstraction Configuration
+      - key: GOOGLE_AI_STUDIO
+        sync: false
+      - key: PIMLICO_BUNDLER_URL
+        sync: false
+      - key: BICONOMY_API_KEY
+        sync: false
+      - key: BICONOMY_PROJECT_ID
+        sync: false
+      - key: ENTRYPOINT_ADDR
+        value: "0x0000000071727de22e5e9d8baf0edac6f37da032"
+      # Target chain for arb execution.
+      # 8453 = Base (lower gas vs mainnet → lower minimum viable spread)
+      - key: CHAIN_ID
+        value: "8453"
+      # Pimlico network slug for bundler URL construction
+      - key: PIMLICO_NETWORK
+        value: base
+      # Parallel scan concurrency (number of pairs scanned simultaneously)
+      - key: SCAN_CONCURRENCY
+        value: "8"
+
+  # ─── Dashboard (Render Static Site — served via CDN) ─────────────────────────
+  # Vite produces static HTML/JS/CSS. No Node.js runtime at serve time.
+  # Must be type: static (not type: web) — web type expects a running server.
+  - type: static
+    name: brightlight-dashboard
+    # Build: install deps, then build ONLY the brightsky Vite app.
+    # @workspace/api-client-react and @workspace/api-zod are TypeScript source
+    # consumed directly by Vite — no separate compilation needed.
+    buildCommand: >
+      npm install -g pnpm@9 &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @workspace/brightsky run build
+    staticPublishPath: ./artifacts/dist/public
+    headers:
+      # HTML entry point — never cache (picks up new deploy immediately)
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+      # Hashed static assets — cache forever (Vite appends content hash to filenames)
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: PNPM_VERSION
+        value: "9"
+      # BASE_PATH must be "/" at root-level Render static URL
+      - key: BASE_PATH
+        value: /
+      # API base URL — must match the brightsky-api service URL exactly
+      - key: VITE_API_BASE_URL
+        value: https://brightlight-api.onrender.com
+      # Displayed in the UI so users know which chain is targeted
+      - key: VITE_CHAIN_ID
+        value: "8453"
+      - key: VITE_NETWORK_NAME
+        sync: false
+
+databases:
+  - name: brightlight-db
+    databaseName: brightlight
+    plan: free
+    region: oregon # same region as API service — minimises DB connection latency
+
+
+# ─── How to set secrets in Render (one-time setup) ───────────────────────────
+#
+# Option A — Per-service (simple):
+#   Render Dashboard → brightsky-api → Environment
+#   Add: PIMLICO_API_KEY, RPC_ENDPOINT, ALCHEMY_API_KEY
+#
+# Option B — Env Group (cleaner, shared across services):
+#   Render Dashboard → Env Groups → Create Group "brightsky-secrets"
+#   Add: PIMLICO_API_KEY, RPC_ENDPOINT, ALCHEMY_API_KEY
+#   Then: brightsky-api → Environment → Link Env Group → brightsky-secrets

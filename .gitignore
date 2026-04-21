@@ -1,0 +1,17 @@
+node_modules/
+# .env removed to allow Render auto-detection (Ensure repo is PRIVATE)
+.env.local
+.env.production
+.env-data.md
+dist/
+artifacts/dist/
+*.log
+pnpm-debug.log*
+.eslintcache
+.vscode/
+.idea/
+build/
+.pnpm-store/node_modules/
+target/
+dist/
+.env
