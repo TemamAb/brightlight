@@ -10,7 +10,7 @@ RUN rustup target add x86_64-unknown-linux-musl &amp;&amp; \
 FROM node:22.12-alpine AS pnpm-builder
 RUN apk add --no-cache git bash
 WORKDIR /app
-RUN corepack enable &amp;&amp; corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 COPY lib lib/
