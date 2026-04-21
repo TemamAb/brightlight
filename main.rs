@@ -731,6 +731,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     watchtower_stats.is_executor_deployed.store(true, Ordering::Relaxed);
     watchtower_stats.is_bundler_online.store(true, Ordering::Relaxed);
     
+    // BSS-20: Broadcast channel for Node.js IPC Bridge Telemetry
+    let (opp_tx, _) = broadcast::channel::<String>(100);
+
     // BSS-26 Control Channel: System-wide Policy
     let (policy_tx, mut policy_rx) = watch::channel(SystemPolicy {
         max_hops: 3,
@@ -817,7 +820,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start BSS-20 API Gateway for Dashboard monitoring
     let api_stats = Arc::clone(&watchtower_stats);
-    tokio::spawn(async move { run_api_gateway(api_stats).await; });
+    let gateway_rx = opp_tx.subscribe();
+    tokio::spawn(async move { run_api_gateway(api_stats, gateway_rx).await; });
 
     // --- SUBSYSTEM BSS-04: State Persistence Task ---
     let persistence_graph = Arc::clone(&graph);
@@ -831,7 +835,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- SUBSYSTEM BSS-13: Bellman-Ford Strategy Task ---
     let strategy_graph = Arc::clone(&graph);
-    thread::Builder::new()
+    let solver_stats = Arc::clone(&watchtower_stats);
+    let solver_opp_tx = opp_tx.clone();
+
+    std::thread::Builder::new()
         .name("brightsky-solver".to_string())
         .spawn(move || {
         // BSS-01 Optimization: Solver isolation on dedicated physical core 
@@ -910,19 +917,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     else if is_sandwich_threat {
                         println!("[BSS-17] THREAT DETECTED: Sandwich bot targeting WETH cycle. Aborting for safety.");
-                        watchtower_stats.adversarial_detections.fetch_add(1, Ordering::Relaxed);
+                        solver_stats.adversarial_detections.fetch_add(1, Ordering::Relaxed);
                         continue;
                     } else {
                         println!("[BSS-13] ARBITRAGE SIGNAL: {:.4}% profit detected via WETH cycle", profit_pct);
-                        watchtower_stats.cycles_detected_count.fetch_add(1, Ordering::Relaxed);
+                        solver_stats.cycles_detected_count.fetch_add(1, Ordering::Relaxed);
+
+                        // BSS-20: Push to IPC Bridge for Node.js Telemetry
+                        let telemetry = serde_json::json!({
+                            "chain_id": 1,
+                            "protocol": "uniswap_v2",
+                            "path": vec!["WETH", "USDC", "WETH"],
+                            "spreadPct": profit_pct,
+                            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            "shadow_mode_active": policy.shadow_mode,
+                        });
+                        if let Ok(msg) = serde_json::to_string(&telemetry) {
+                            let _ = solver_opp_tx.send(msg + "\n");
+                        }
                     }
                 }
             }
 
             // Track Solver performance for BSS-26
             let elapsed = start_time.elapsed().as_millis() as u64;
-            watchtower_stats.solver_jitter_ms.store(elapsed, Ordering::Relaxed);
-            watchtower_stats.solver_latency_p99_ms.store(elapsed, Ordering::Relaxed); // Simplified for P99 simulation
+            solver_stats.solver_jitter_ms.store(elapsed, Ordering::Relaxed);
+            solver_stats.solver_latency_p99_ms.store(elapsed, Ordering::Relaxed); 
 
             // Elite Grade: Polling interval reduced for sub-block opportunity capture
             thread::sleep(Duration::from_millis(100));

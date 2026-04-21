@@ -1,6 +1,15 @@
 # ─── STAGE 1: RUST SOLVER BUILDER ─────────────────────────────────────────────
 FROM rust:1.82-slim-bookworm AS rust-builder
 WORKDIR /app
+
+# BSS-37: Install native dependencies required for ethers-rs and SSL support
+# Slim images lack pkg-config and SSL headers needed for RPC connectivity.
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 # Build high-performance solver with CPU optimizations
 RUN cargo build --release

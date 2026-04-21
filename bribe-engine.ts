@@ -1,8 +1,6 @@
-import type { TradingAnalysis, MarketData } from "./lib/ai-agent";
-
 /**
  * BrightSky Bribe Engine with AI-Powered Analysis
- * Ported from the Rational Predator logic in the Python debug assets.
+ * Deterministic, ultra-low latency risk and bribe calculation engine.
  */
 export class BrightSkyBribeEngine {
   // BSS-07: Bribe Engine / BSS-20: Self-Heal Loop
@@ -99,48 +97,6 @@ export class BrightSkyBribeEngine {
       proceed,
       netProfit,
       ev
-    };
-  }
-
-  /**
-   * AI-powered analysis for arbitrage opportunities
-   * @param marketData Current market conditions
-   * @param profit Potential profit amount
-   * @returns AI analysis combined with traditional bribe calculation
-   */
-  static async analyzeArbitrageOpportunity(
-    marketData: MarketData,
-    profit: number
-  ): Promise<{
-    bribeAnalysis: ReturnType<typeof this.calculateProtectedBribe>;
-    aiAnalysis: TradingAnalysis; // BSS-21: Alpha-Copilot
-    finalRecommendation: 'EXECUTE' | 'SKIP' | 'MONITOR';
-  }> {
-    // BSS-16/BSS-18 Integration: Derive success probability from congestion and latency
-    const networkLatency = marketData.latencyMs || 25; 
-    const congestionFactor = marketData.volatility > 0.5 ? 0.2 : 0.05;
-    const successProb = Math.max(0.1, 0.98 - congestionFactor);
-
-    const bribeAnalysis = this.calculateProtectedBribe(profit, successProb, 0.005);
-
-    const { tradingAI } = await import("./lib/ai-agent");
-
-    // Get AI analysis of market conditions
-    const aiAnalysis = await tradingAI.analyzeMarket(marketData);
-
-    // Combine AI insights with traditional analysis
-    let finalRecommendation: 'EXECUTE' | 'SKIP' | 'MONITOR' = 'SKIP';
-
-    if (bribeAnalysis.proceed && aiAnalysis.recommendation === 'BUY' && aiAnalysis.confidence > 70) {
-      finalRecommendation = 'EXECUTE';
-    } else if (bribeAnalysis.margin > 10 && aiAnalysis.riskLevel === 'LOW') {
-      finalRecommendation = 'MONITOR';
-    }
-
-    return {
-      bribeAnalysis,
-      aiAnalysis,
-      finalRecommendation
     };
   }
 }

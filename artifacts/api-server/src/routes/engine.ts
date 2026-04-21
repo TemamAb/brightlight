@@ -647,6 +647,8 @@ router.get("/engine/status", async (_req, res) => {
     opportunitiesDetected: engineState.opportunitiesDetected,
     opportunitiesExecuted: engineState.opportunitiesExecuted,
     chainId:               engineState.chainId,
+    ipcConnected:          sharedEngineState.ipcConnected,
+    shadowModeActive:      sharedEngineState.shadowModeActive,
     scanInFlight:          engineState.scanInFlight,
     skippedScanCycles:     engineState.skippedScanCycles,
     circuitBreakerOpen:    Boolean(
