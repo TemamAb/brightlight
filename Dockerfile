@@ -21,14 +21,7 @@ COPY tsconfig.base.json tsconfig.json ./
 # Build api-server bundle (esbuild TypeScript → single JS file)
 RUN pnpm --filter @workspace/api-server run build
 
-# Stage 3: Runtime (Alpine minimal, multi-binary)
-FROM alpine:3.20
-RUN apk add --no-cache nodejs=22.12.0-r0 dumb-init bash redis curl
-WORKDIR /app
-# Copy Rust binary
-COPY --from=rust-builder /app/target/x86_64-unknown-linux-musl/release/rust-backbone ./rust-backbone
-# Copy Node bundle + workspace libs
-COPY --from=pnpm-builder /app/node_modules ./node_modules
+
 COPY --from=pnpm-builder /app/artifacts/api-server/dist ./dist
 COPY --from=pnpm-builder /app/lib/db ./lib/db
 # Drizzle (schema push pre-deploy)
