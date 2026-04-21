@@ -24,11 +24,8 @@ RUN pnpm --filter @workspace/api-server run build
 
 COPY --from=pnpm-builder /app/artifacts/api-server/dist ./dist
 COPY --from=pnpm-builder /app/lib/db ./lib/db
-# Drizzle (schema push pre-deploy)
-COPY lib/db/package.json lib/db/drizzle.config.mjs ./lib/db/
+COPY --from=pnpm-builder /app/lib/db/package.json /app/lib/db/drizzle.config.mjs ./lib/db/
 EXPOSE 3000 4001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["bash", "-c", "pnpm --filter @workspace/db run push &amp;&amp; node dist/index.js"]
+  CMD curl -f http://localhost
 
