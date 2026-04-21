@@ -37,6 +37,24 @@ impl GraphPersistence {
             adjacency_list: Arc::new(DashMap::with_capacity(2000)),
         }
     }
+    
+    /// BSS-30 Audit: Scans the entire graph for structural or economic invariant violations.
+    pub fn validate_global_invariants(&self) -> Option<String> {
+        for entry in self.adjacency_list.iter() {
+            let from = entry.key();
+            for neighbor in entry.value().iter() {
+                // 1. Structural: No Self-Loops
+                if neighbor.token_address == *from {
+                    return Some(format!("Self-referencing loop at {}", from));
+                }
+                // 2. Economic: Minimum Liquidity (Dust Protection)
+                if neighbor.pool.reserve_0 < MIN_RESERVE_THRESHOLD || neighbor.pool.reserve_1 < MIN_RESERVE_THRESHOLD {
+                    return Some(format!("Dust liquidity detected in pool {}", neighbor.pool.pool_address));
+                }
+            }
+        }
+        None
+    }
 
     /// Updates a pool's state in the persistent cache.
     /// Called by BSS-05 (Multi-Chain Sync) whenever a new Sync event is detected.

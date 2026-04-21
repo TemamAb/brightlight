@@ -1,44 +1,45 @@
-# ─── STAGE 1: RUST SOLVER BUILDER ─────────────────────────────────────────────
-FROM rust:1.82-slim-bookworm AS rust-builder
+# ─── STAGE 1: RUST PLANNER (Cargo Chef) ───────────────────────────────────────
+FROM rust:1.82-slim-bookworm AS chef
+RUN cargo install cargo-chef
 WORKDIR /app
 
-# BSS-37: Install native dependencies required for ethers-rs and SSL support
-# Slim images lack pkg-config and SSL headers needed for RPC connectivity.
+# ─── STAGE 2: RUST RECIPE ─────────────────────────────────────────────────────
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ─── STAGE 3: RUST BUILDER ────────────────────────────────────────────────────
+FROM chef AS rust-builder
+COPY --from=planner /app/recipe.json recipe.json
+
+# BSS-37: Install build dependencies
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    build-essential \
-    cmake \
-    ca-certificates \
+    pkg-config libssl-dev build-essential cmake ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . .
-
-# Build high-performance solver with CPU optimizations
-# BSS-37: Limit concurrent build jobs to mitigate memory pressure on Render free tier (512MB RAM)
+# Build dependencies (cached layer)
 ENV CARGO_BUILD_JOBS=1
-RUN cargo build --release
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# ─── STAGE 2: NODE.JS API BUILDER ─────────────────────────────────────────────
+# Build application
+COPY . .
+RUN cargo build --release && \
+    strip target/release/brightsky-solver
+
+# ─── STAGE 4: NODE.JS API BUILDER ─────────────────────────────────────────────
 FROM node:22-bookworm-slim AS node-builder
 WORKDIR /app
-
-# BSS-37: Install build dependencies required for native Node.js modules
-# Slim images lack the compilers necessary for building native extensions.
 RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
+    python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 COPY . .
-# Install dependencies and build workspaces
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/db run build
 RUN pnpm --filter @workspace/api-server run build
 
-# ─── STAGE 3: RUNTIME ─────────────────────────────────────────────────────────
+# ─── STAGE 5: RUNTIME ─────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim
 WORKDIR /app
 

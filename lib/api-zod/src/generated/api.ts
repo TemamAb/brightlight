@@ -27,6 +27,7 @@ export const GetEngineStatusResponse = zod.object({
   gaslessMode: zod.boolean(),
   pimlicoEnabled: zod.boolean(),
   scannerActive: zod.boolean(),
+  flashloanContractAddress: zod.string().nullable().optional(),
 });
 
 /**

@@ -51,6 +51,7 @@ router.get("/health", async (_req, res) => {
           ? "Database variable exists but client failed to initialize. Check @workspace/db logic."
           : "No database URL found in primary or fallback environment variables.",
         detected_env_keys: envKeys,
+        rpc_configured: hasRpc,
         preflight_strict: isStrict,
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),

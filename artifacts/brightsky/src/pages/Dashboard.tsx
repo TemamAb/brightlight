@@ -136,6 +136,16 @@ export default function Dashboard() {
         </span>
       </div>
 
+      {/* Dynamic Executor Notice */}
+      {status?.flashloanContractAddress && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded border border-electric/20 bg-electric/5 glass-panel">
+          <Zap size={13} className="text-electric shrink-0" />
+          <span className="text-[11px] text-electric/80 font-mono">
+            Active Executor: {status.flashloanContractAddress} (Dynamically Deployed)
+          </span>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard

@@ -3,7 +3,7 @@ services:
   - type: web
     name: brightlight-api
     runtime: docker
-    plan: free
+    plan: starter # Minimum tier for consistent CPU/Mempool performance
     region: oregon
     dockerContext: .
     dockerfilePath: Dockerfile
@@ -35,7 +35,7 @@ services:
       - key: PRE_FLIGHT_STRICT
         value: "true"
       - key: DASHBOARD_USER
-        value: admin
+        sync: false # Set in Render Dashboard
       - key: DASHBOARD_PASS
         generateValue: true
       - key: REDIS_URL
@@ -58,10 +58,6 @@ services:
         sync: false
       - key: WALLET_ADDRESS
         sync: false
-      - key: DEPLOYER_ADDRESS
-        value: "0x748Aa8ee067585F5bd02f0988eF6E71f2d662751"
-      - key: FLASHLOAN_CONTRACT_ADDRESS
-        value: "0x0000000000000000000000000000000000000000"
       - key: ETH_RPC_URL
         value: https://lb.drpc.live/ethereum/AlkT_OfN6UnklsftckUk8anFYye2M-IR8bIerh0xYKQB
       - key: BASE_RPC_URL
@@ -81,9 +77,9 @@ services:
       - key: ALCHEMY_RPC_URL
         sync: false
       - key: MAX_PAIRS_TO_SCAN
-        value: "1000"
+        value: "2500" # Scaled for production graph density
       - key: PAPER_TRADING_MODE
-        value: "false"
+        value: "false" # LIVE MODE ARMED
       - key: EXECUTOR_CODE_HASH
         value: "0x6f2a4c10da345e0d48f2b1c93a9b1e7f3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
       - key: MEV_PROTECTION
@@ -157,7 +153,7 @@ services:
 databases:
   - name: brightlight-db
     databaseName: brightlight
-    plan: free
+    plan: starter
     region: oregon # same region as API service — minimises DB connection latency
 
 

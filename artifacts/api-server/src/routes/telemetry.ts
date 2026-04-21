@@ -11,6 +11,7 @@ import { getEthPriceUsd } from "../lib/priceOracle";
 import { getBlockStats } from "../lib/blockTracker";
 import { sharedEngineState } from "../lib/engineState";
 import { BrightSkyBribeEngine } from "../../../../bribe-engine";
+import { alphaCopilot } from "../lib/alphaCopilot";
 
 const router = Router();
 
@@ -106,13 +107,34 @@ router.get("/telemetry", async (req, res) => {
     // ─── Module B: Neural Feedback Panel (God Tier KPI 19) ────────────
     intelligence: {
       tuning: BrightSkyBribeEngine.getTuning(),
-      learningDelta: 0.02,
+      learningDelta: 0.02,      performanceGaps: (sharedEngineState.subsystemKpis || []).map((kpi: any) => {
+        // Dynamic fetch from Rust backbone: No more hardcoded targets.
+        const metrics = kpi.metrics;
+        const actual = metrics.actual;
+        const target = metrics.target;
+        
+        // Gap calculation: % efficiency towards target.
+        const efficiency = target > 0 
+            ? (metrics.unit === 'ms' || metrics.unit === 's') 
+                ? Math.max(0, 100 - ((actual - target) / target) * 100)
+                : (actual / target) * 100
+            : 100;
+
+        return {
+          subsystem: kpi.id,
+          kpi: metrics.kpi,
+          design: target,
+          operational: actual,
+          gap: Math.min(100, efficiency).toFixed(1) + "%"
+        };
+      }),
       revertPrediction: "LOW", // Placeholder for KPI 20
+      bottleneckReport: sharedEngineState.bottleneckReport || null,
     },
 
     // ─── Module C: Path Complexity (Ultra-Elite KPI 13) ───────────────
     graphDiscovery: {
-      pathComplexity: sharedEngineState.pathComplexity,
+      pathComplexity: sharedEngineState.pathComplexity || "O(V*E)",
       discoveryEngine: "Rust/Bellman-Ford",
     },
 
@@ -146,6 +168,19 @@ router.get("/telemetry", async (req, res) => {
     dataMode: "REAL_PRICES_SHADOW_EXECUTION",
     disclaimer: "Price data from CoinGecko/DeFiLlama (real). Block tracking via Cloudflare RPC (real). Trade execution is SHADOW simulation until Pimlico key is configured.",
   });
+});
+
+/**
+ * BSS-21 / BSS-32: Debugging Order Dispatch Gateway
+ * Receives human commands from the dashboard and pipes them to Alpha-Copilot for signing.
+ */
+router.post("/debug/dispatch", async (req, res) => {
+  try {
+    const response = await alphaCopilot.handleRouteDispatch(req.body);
+    res.json(response);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 export default router;

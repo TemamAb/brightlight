@@ -5,8 +5,12 @@ import { logger } from "./logger";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { sharedEngineState } from "./engineState";
+import * as net from "net";
+import * as crypto from "crypto";
 
 const execAsync = promisify(exec);
+
+export type DebugIntent = "Audit" | "Recalibrate" | "Reset" | "ModifyCode" | "CreateSubsystem" | "ConfirmOptimization";
 
 /**
  * KPI 21: Alpha-Copilot — AI-Powered Mission Controller.
@@ -14,6 +18,108 @@ const execAsync = promisify(exec);
  */
 export class AlphaCopilot {
   constructor() {}
+
+  /**
+   * BSS-32 Security: Computes a cryptographically secure HMAC-SHA256 signature
+   * for a DebuggingOrder. This ensures that only the authorized API server
+   * can issue commands to the Rust specialists.
+   */
+  private generateSignature(target: string, timestamp: number, nonce: bigint, payload?: string): string {
+    const secret = process.env.DASHBOARD_PASS || "development_secret_key";
+    const hmac = crypto.createHmac("sha256", secret);
+    
+    hmac.update(target);
+    if (payload) {
+      hmac.update(payload);
+    }
+
+    // BSS-32: Include timestamp in HMAC for replay protection
+    const tsBuf = Buffer.alloc(8);
+    tsBuf.writeBigUInt64BE(BigInt(timestamp));
+    hmac.update(tsBuf);
+
+    // BSS-32: Include nonce in HMAC
+    const nonceBuf = Buffer.alloc(8);
+    nonceBuf.writeBigUInt64BE(nonce);
+    hmac.update(nonceBuf);
+    
+    return hmac.digest("hex");
+  }
+
+  /**
+   * BSS-32: Prepares a signed DebuggingOrder payload for the Rust backbone.
+   * The signature is placed in the 'params' field, matching the Rust SecurityModule.
+   */
+  public prepareSignedOrder(target: string, intent: DebugIntent, payload?: string) {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const nonce = crypto.randomBytes(8).readBigUInt64BE();
+    const signature = this.generateSignature(target, timestamp, nonce, payload);
+    
+    return {
+      target,
+      intent,
+      params: signature,
+      payload: payload || null,
+      timestamp,
+      nonce: nonce.toString() // Transmit as string to handle BigInt in JSON
+    };
+  }
+
+  /**
+   * BSS-03 / BSS-32: Dispatches a signed DebuggingOrder to the Rust backbone
+   * over the high-speed TCP bridge (Port 4001).
+   */
+  public async dispatchSignedOrder(order: any): Promise<string> {
+    const port = parseInt(process.env.INTERNAL_BRIDGE_PORT || "4001");
+    logger.info(
+      { target: order.target, intent: order.intent, port, nonce: order.nonce }, 
+      "BSS-03: Dispatching signed order to backbone via TCP bridge"
+    );
+
+    return new Promise((resolve, reject) => {
+      const client = net.createConnection({ port, host: "127.0.0.1" }, () => {
+        client.write(JSON.stringify(order));
+      });
+
+      client.on("data", (data) => {
+        resolve(data.toString());
+        client.end();
+      });
+
+      client.on("error", (err) => {
+        reject(err);
+      });
+
+      client.on("timeout", () => {
+        client.end();
+        reject(new Error("Bridge connection timed out"));
+      });
+
+      client.setTimeout(5000);
+    });
+  }
+
+  /**
+   * BSS-21 / BSS-32: High-level handler for the /api/debug/dispatch route.
+   * Receives a request from the dashboard, generates a secure signature,
+   * and dispatches it to the Rust engine via the IPC bridge.
+   */
+  public async handleRouteDispatch(body: { target: string; intent: string; payload?: string }): Promise<any> {
+    try {
+      // Prepare the cryptographically signed order (includes timestamp and random nonce)
+      const signedOrder = this.prepareSignedOrder(
+        body.target,
+        body.intent as DebugIntent,
+        body.payload
+      );
+
+      const response = await this.dispatchSignedOrder(signedOrder);
+      return JSON.parse(response);
+    } catch (err) {
+      logger.error({ err, target: body.target }, "Alpha-Copilot route dispatch failed");
+      throw new Error(`IPC Bridge Error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   async analyzePerformance(): Promise<string> {
     try {
