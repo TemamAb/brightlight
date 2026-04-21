@@ -8,10 +8,15 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     build-essential \
+    cmake \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+
 # Build high-performance solver with CPU optimizations
+# BSS-37: Limit concurrent build jobs to mitigate memory pressure on Render free tier (512MB RAM)
+ENV CARGO_BUILD_JOBS=1
 RUN cargo build --release
 
 # ─── STAGE 2: NODE.JS API BUILDER ─────────────────────────────────────────────
