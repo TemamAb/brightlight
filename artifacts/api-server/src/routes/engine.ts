@@ -110,48 +110,60 @@ function genId(prefix: string) {
 }
 
 // ─── KPI 1: Rust IPC Bridge (Listener) ─────────────────────────────────────────
-const rustIpcServer = net.createServer((socket) => {
-  logger.info("Rust high-speed worker connected via IPC [Port 4001]");
+function connectToRustBridge(retryCount = 0) {
+  const bridgePort = parseInt(process.env.INTERNAL_BRIDGE_PORT || "4001");
+  const maxRetries = 10;
+
+  const socket = net.connect({ port: bridgePort, host: "127.0.0.1" }, () => {
+    logger.info(`[BSS-03] Connected to Rust Telemetry Bridge on port ${bridgePort}`);
+    sharedEngineState.ipcConnected = true;
+  });
+
   let buffer = "";
-
-  socket.on("data", async (data) => {
-    try {
-      buffer += data.toString();
-      let boundary = buffer.indexOf("\n");
-
-      while (boundary !== -1) {
-        const line = buffer.substring(0, boundary).trim();
-        buffer = buffer.substring(boundary + 1);
-
-        if (line) {
+  socket.on("data", (data) => {
+    buffer += data.toString();
+    let boundary = buffer.indexOf("\n");
+    while (boundary !== -1) {
+      const line = buffer.substring(0, boundary).trim();
+      buffer = buffer.substring(boundary + 1);
+      if (line) {
+        try {
           const opp = JSON.parse(line);
-          
-          // Update high-speed price reference for telemetry and logic
-          if (opp.refPrice) {
-            sharedEngineState.lastBackbonePrice = opp.refPrice;
-          }
+          if (opp.refPrice) sharedEngineState.lastBackbonePrice = opp.refPrice;
+          if (typeof opp.shadow_mode_active === "boolean") sharedEngineState.shadowModeActive = opp.shadow_mode_active;
           
           const hops = opp.path ? opp.path.length : 2;
           sharedEngineState.pathComplexity[hops] = (sharedEngineState.pathComplexity[hops] || 0) + 1;
           sharedEngineState.chainLatencies[opp.chain_id] = Date.now() - (opp.timestamp * 1000);
 
-          // KPI 9: Throttled Telemetry to prevent Node.js Event Loop starvation (Elite Grade)
           if (opp.spreadPct > 0.1) {
-            broadcastTelemetry("RUST_OPPORTUNITY", {
-              ...opp,
-              latency_ms: Date.now() - (opp.timestamp * 1000)
-            });
+            broadcastTelemetry("RUST_OPPORTUNITY", { ...opp, latency_ms: Date.now() - (opp.timestamp * 1000) });
           }
-        }
-        boundary = buffer.indexOf("\n");
+        } catch (e) { /* silent parse error */ }
       }
-    } catch (err) {
-      logger.error({ err }, "Failed to parse Rust IPC data");
+      boundary = buffer.indexOf("\n");
     }
   });
-});
 
-rustIpcServer.listen(4001, "127.0.0.1");
+  socket.on("error", (err) => {
+    sharedEngineState.ipcConnected = false;
+    if (retryCount < maxRetries) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+      logger.warn(`[BSS-03] IPC Bridge unavailable, retrying in ${delay}ms...`);
+      setTimeout(() => connectToRustBridge(retryCount + 1), delay);
+    } else {
+      logger.error("[BSS-03] IPC Bridge critical failure: Max retries exceeded.");
+    }
+  });
+
+  socket.on("end", () => {
+    sharedEngineState.ipcConnected = false;
+    logger.warn("[BSS-03] Rust IPC Bridge disconnected. Attempting reconnect...");
+    connectToRustBridge(0);
+  });
+}
+
+connectToRustBridge();
 
 // ─── KPI 11: Session Key Generation ─────────────────────────────────────────────
 function generateEphemeralWallet(): { address: string; privateKey: string } {

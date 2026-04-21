@@ -9,7 +9,9 @@
   },
   "scripts": {
     "push": "drizzle-kit push --config=drizzle.config.mjs",
-    "push-force": "drizzle-kit push --force --config=drizzle.config.mjs"
+    "push-force": "drizzle-kit push --force --config=drizzle.config.mjs",
+    "migrate": "drizzle-kit migrate --config=drizzle.config.mjs",
+    "generate": "drizzle-kit generate --config=drizzle.config.mjs"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

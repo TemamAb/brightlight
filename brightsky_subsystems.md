@@ -39,11 +39,22 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **BSS-19** | **Predictive Revert**| historical revert analysis. | eth_call | < 10ms | Inaccurate sim | Tight slippage guard |
 | **BSS-20** | **Self-Heal Loop** | Autonomous bribe tuning. | ML Loop | Async | Over-correction| Reset to Baseline |
-| **BSS-21** | **Alpha-Copilot** | GPT-4o powered controller. | OpenAI | Async | API Timeout | Local Heuristics |
-| **BSS-22** | **Circuit Breaker** | Atomic "Panic Stop". | Guard | < 1ms | False Alarm | Manual Override |
+| **BSS-21** | **Alpha-Copilot** | | Atomic "Panic Stop". | Guard | < 1ms | False Alarm | Manual Override |
 | **BSS-23** | **HD Vault** | Session-key management. | BIP-32 | < 5ms | Key leak | Immediate auto-drain |
 | **BSS-24** | **Diagnostic Hub** | Audit trail & performance. | Drizzle | Async | Storage full | Prune old logs |
 | **BSS-25** | **Command Kernel** | Secure terminal access. | Shell | Async | Unauthorized cmd| Whitelist lock |
+
+## [DOMAIN E] CLOUD INFRASTRUCTURE & DEPLOYMENT (The Foundation)
+
+| Subsystem | Designation | Function | Tech Driver | Latency Budget | Failure Mode | Fallback Strategy |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **BSS-26** | **Nexus Orchestrator**| 24/7 Watchtower & Health. | Rust | < 10ms | Logic stall | Emergency Shadow |
+| **BSS-34** | **Deployment Engine** | Smart contract lifecycle. | Solidity/Forge| N/A | Contract mismatch| Automated Redeploy |
+| **BSS-35** | **Gasless Manager** | ERC-4337 UserOp bundling. | Pimlico | < 100ms | Bundler offline | Public RPC / Legacy |
+| **BSS-36** | **Auto-Optimizer** | Self-modifying KPI weights. | Rust/ML | 60s Cycle | Over-optimization| Parameter Reset |
+| **BSS-37** | **Dockerization** | Multi-stage Hermetic builds. | Docker/OCI | N/A | Layer corruption | Cache-bust rebuild |
+| **BSS-38** | **Pre-flight Check** | Env & Binary integrity sync. | Shell/Node | < 2s | Missing Secrets | Halt & Alert |
+| **BSS-39** | **Render Sync** | Zero-downtime orchestration. | Render API | N/A | Deploy timeout | Health-check rollback|
 
 ## Core Architecture Progress
 
@@ -51,7 +62,11 @@
 - [x] **MEV/Bundle Infrastructure**: Private RPC communication via eth_sendBundle verified.
 - [x] **Multi-Chain Orchestration**: 11 chains scanning in parallel across all core threads.
 - [x] **Risk Circuitry**: Automated cooling and risk management active.
-- [x] **Deployment Orchestration**: Dockerized multi-stage build and Render pipeline verified.
+- [x] **Nexus Orchestration (BSS-26)**: Global health monitoring and autonomous remediation active.
+- [x] **Auto-Optimization (BSS-36)**: 60-second KPI feedback loop integrated.
+- [x] **Hermetic Dockerization (BSS-37)**: Immutable multi-stage OCI images implemented.
+- [x] **Pre-flight Integrity (BSS-38)**: Automated environment and binary validation active.
+- [x] **Layered Defense Audit**: Build-time, Boot-time, and Run-time checks synchronized.
 
 ## System Aesthetic (The Terminal)
 
@@ -60,13 +75,17 @@
 - **Typography**: 125% Scale Increase. High-contrast **Bright Blue** (`#00A3FF`) for data.
 - **Visual Cues**: **Glowing Neon Green** (`#00FF94`) metrics for profit with `0 0 10px #00FF94` glow effects.
 - **Layout**: Grafana-inspired high-density minimalist grids.
-- **Copilot Mandate**: The Alpha-Copilot is an OpenAI-powered Mission Controller. It monitors PnL health, analyzes `trades` for slippage anomalies, and autonomously tunes `BribeEngine` parameters 24/7.
 
-## Alpha-Copilot Mandate
-The Alpha-Copilot is an autonomous software agent powered by OpenAI. Its responsibilities include:
-1. **Post-Trade Diagnostics**: Analyzing `trades` table failures to recommend slippage or bribe adjustments.
-2. **Real-time Guard**: Monitoring the `stream_events` for anomaly detection (e.g., unusual chain latencies).
-3. **Mission Control**: Interacting with the Human Commander via the dashboard to summarize engine performance and suggest strategy pivots.
+## Visual Identity & Branding
+- **Logo Placement**: Fixed to the **Top-Right Corner** of the dashboard with a `z-index: 1000` overlay.
+- **Logo Enhancement**: The `LOGO.png` utilizes a **Matte Silver** border with a **Neon Green** outer glow. 
+- **Glassmorphism**: The logo container utilizes a 15px backdrop-blur to maintain visibility over high-frequency telemetry charts.
+
+## Alpha-Copilot Mandate (BSS-21)
+The Alpha-Copilot is a mission diagnostic engine. Its responsibilities include:
+1. **Post-Trade Diagnostics**: Monitoring the `trades` table to detect systematic failures and execution drift.
+2. **Real-time Guard**: Monitoring `stream_events` for infrastructure anomalies and RPC latency spikes.
+3. **Mission Control**: Providing the Commander with high-fidelity operational reports and real-time deployment status.
 
 ## Verification Standard
 
@@ -75,5 +94,5 @@ The Alpha-Copilot is an autonomous software agent powered by OpenAI. Its respons
 - [x] DB-backed event/trade persistence verified
 - [x] IPC bridge connectivity verified
 - [x] 18-point KPI Strategy Finalized
-- [x] AI-Augmented Copilot Monitoring Active
+- [x] AI-Augmented Copilot Monitoring (BSS-21) Active
 - [ ] Positive net live execution verified

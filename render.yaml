@@ -13,12 +13,11 @@ services:
     # Build: install deps, then compile ONLY the api-server bundle.
     # @workspace/db, @workspace/api-zod are consumed as TypeScript source —
     # esbuild bundles them in. No separate build step needed for those packages.
-    # CRITICAL: Push Drizzle schema BEFORE the server starts.
+    # CRITICAL: Run Drizzle migrations BEFORE the server starts.
     # On a fresh Render Postgres, tables don't exist — every API call fails
     # with "relation does not exist" without this step.
-    # Uses the `push` script in lib/db/package.json (drizzle-kit push).
-    # Audit Fix: Removed redundant pnpm install to speed up deployment.
-    preDeployCommand: pnpm --filter @workspace/db run push
+    # This command executes inside the built Docker container image (BSS-37).
+    preDeployCommand: pnpm --filter @workspace/db run migrate
     # Render polls this path to know when the service is ready.
     # Without a matching route, Render marks the service as unhealthy → restart loop.
     healthCheckPath: /api/health
@@ -31,20 +30,20 @@ services:
         value: "9"
       - key: PORT
         value: "3000"
+      - key: INTERNAL_BRIDGE_PORT
+        value: "4001"
+      - key: PRE_FLIGHT_STRICT
+        value: "true"
       - key: DASHBOARD_USER
         value: admin
       - key: DASHBOARD_PASS
-        value: alphamark2026
+        generateValue: true
       - key: REDIS_URL
         value: redis://localhost:6379
       - key: DATABASE_URL
         fromDatabase: { name: brightlight-db, property: connectionString }
       - key: SESSION_SECRET
         generateValue: true
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
       # ── Set these in Render Dashboard → brightsky-api → Environment ───────
       # Pimlico API key — required for LIVE ERC-4337 gasless UserOps.
       # Format: pim_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -85,6 +84,8 @@ services:
         value: "1000"
       - key: PAPER_TRADING_MODE
         value: "false"
+      - key: EXECUTOR_CODE_HASH
+        value: "0x6f2a4c10da345e0d48f2b1c93a9b1e7f3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
       - key: MEV_PROTECTION
         value: "true"
       - key: FLASH_LOAN_MAX
@@ -93,8 +94,6 @@ services:
       - key: ALCHEMY_API_KEY
         sync: false
       # AI & Account Abstraction Configuration
-      - key: GOOGLE_AI_STUDIO
-        sync: false
       - key: PIMLICO_BUNDLER_URL
         sync: false
       - key: BICONOMY_API_KEY

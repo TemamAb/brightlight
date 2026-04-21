@@ -16,6 +16,7 @@ export interface SharedEngineState {
   pathComplexity: Record<number, number>; // KPI 13: Hop distribution (2-hop, 3-hop, etc.)
   lastBackbonePrice: number | null; // Elite Grade: High-frequency price sync
   ipcConnected: boolean; // KPI 1: Rust Worker Link Status
+  shadowModeActive: boolean; // BSS-26/38: Integrity-based safety gate
 }
 
 export const sharedEngineState: SharedEngineState = {
@@ -30,4 +31,5 @@ export const sharedEngineState: SharedEngineState = {
   pathComplexity: { 2: 0, 3: 0, 4: 0, 5: 0 },
   lastBackbonePrice: null,
   ipcConnected: false,
+  shadowModeActive: false,
 };

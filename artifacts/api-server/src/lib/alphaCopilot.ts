@@ -1,10 +1,10 @@
-import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { tradesTable, streamEventsTable } from "@workspace/db";
 import { desc, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { sharedEngineState } from "./engineState";
 
 const execAsync = promisify(exec);
 
@@ -13,45 +13,36 @@ const execAsync = promisify(exec);
  * Analyzes real-time performance and interacts with the Human Commander.
  */
 export class AlphaCopilot {
-  private openai: OpenAI | null = null;
-
-  constructor() {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
-    }
-  }
+  constructor() {}
 
   async analyzePerformance(): Promise<string> {
-    if (!this.openai) return "Copilot inactive: OPENAI_API_KEY missing.";
-
     try {
       // Fetch last 5 trades and 10 critical events
-      const lastTrades = await db.select().from(tradesTable).orderBy(desc(tradesTable.createdAt)).limit(5);
+      const lastTrades = await db.select().from(tradesTable).orderBy(desc(tradesTable.timestamp)).limit(5);
       const recentEvents = await db.select().from(streamEventsTable).orderBy(desc(streamEventsTable.timestamp)).limit(10);
 
-      const systemPrompt = `You are the BrightSky Alpha-Copilot, a world-class MEV strategy optimizer. 
-      You have mission-critical access to the system terminal and environment variables.
-      Your mandate: Analyze performance, identify anomalies, and autonomously execute terminal commands or 
-      edit .env configurations (KPI 19/21) to ensure 24/7 profitability.
-      Report in a professional, metallic trading tone. 
-      Design aesthetic: Metallic White (#F5F7FA), Bright Blue (#00A3FF), Neon Green (#00FF94).`;
+      const totalPnL = lastTrades.reduce((acc, t) => acc + Number(t.profitUsd || 0), 0);
+      
+      const report = [
+        "─── BRIGHTSKY MISSION REPORT ───",
+        `MODE: ${sharedEngineState.mode}`,
+        `INTEGRITY: ${sharedEngineState.shadowModeActive ? "DEGRADED (SHADOW)" : "OPTIMAL"}`,
+        `IPC_STATUS: ${sharedEngineState.ipcConnected ? "CONNECTED" : "DISCONNECTED"}`,
+        "",
+        "─── PERFORMANCE ───",
+        `RECENT_PNL: $${totalPnL.toFixed(2)}`,
+        `LAST_TRADES:`,
+        ...lastTrades.map(t => `  • [${t.status}] $${t.profitUsd} (${t.latencyMs}ms)`),
+        "",
+        "─── SYSTEM EVENTS ───",
+        ...recentEvents.map(e => {
+          const msg = e.message.length > 50 ? e.message.substring(0, 47) + "..." : e.message;
+          return `  ! [${e.type}] ${msg}`;
+        }),
+        "───────────────────────────────"
+      ].join("\n");
 
-      const userMessage = JSON.stringify({
-        trades: lastTrades.map(t => ({ pnl: t.profitUsd, latency: t.latencyMs, status: t.status })),
-        events: recentEvents.map(e => ({ type: e.type, msg: e.message }))
-      });
-
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage }
-        ],
-        temperature: 0.7,
-      });
-
-      return response.choices[0].message.content || "Analysis inconclusive.";
+      return report;
     } catch (err) {
       logger.error({ err }, "Alpha-Copilot analysis failed");
       return "Mission analysis error. Check system logs.";
