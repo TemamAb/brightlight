@@ -1,9 +1,10 @@
 # ─── STAGE 1: RUST PLANNER (Cargo Chef) ───────────────────────────────────────
-FROM lukemathwalker/cargo-chef:0.1.68-rust-1.82-bookworm AS chef
+FROM lukemathwalker/cargo-chef:0.1.70-rust-1.82-bookworm AS chef
 
-# BSS-37: Install build dependencies required for solver compilation (OpenSSL, etc.)
-RUN apt-get update && apt-get install -y \
-    pkg-config libssl-dev build-essential cmake ca-certificates \
+# BSS-37: Install build dependencies + solc/protoc for ethers abigen + protos
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev build-essential cmake ca-certificates git clang llvm libclang-dev \
+    solc protobuf-compiler libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -17,9 +18,13 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS rust-builder
 COPY --from=planner /app/recipe.json recipe.json
 
-# Build dependencies (cached layer)
-ENV CARGO_BUILD_JOBS=1
+# Build dependencies (cached layer) - Fix for abigen solc fetch
+ENV CARGO_BUILD_JOBS=1 \
+    RUSTFLAGS="-C target-cpu=native -C link-arg=-s"
 RUN cargo chef cook --release --recipe-path recipe.json
+
+# Verify recipe worked
+RUN ls -la recipe.json && cat recipe.json | head -10
 
 # Build application
 COPY . .
