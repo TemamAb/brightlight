@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::thread;
 use tokio::sync::{mpsc, watch, RwLock, broadcast};
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::{sleep, timeout};
+use std::time::Duration;
 use std::sync::atomic::{AtomicU64, AtomicUsize, AtomicBool, Ordering};
 use std::sync::Mutex;
 /// BSS-26: The Watchtower Framework & Health Definitions
@@ -643,23 +644,17 @@ async fn run_watchtower(
         // --- BSS-31: Circuit Breaker Check ---
         if CircuitBreaker::is_tripped(&stats) {
             println!("[BSS-31] CIRCUIT BREAKER TRIPPED. Entering Emergency Lockdown.");
-            let mut policy = (*policy_tx.borrow()).clone();
+            let mut policy = (*policy_tx.subscribe().borrow()).clone();
             policy.shadow_mode = true;
             let _ = policy_tx.send(policy);
         }
 
-        let mut current_policy = (*policy_tx.borrow()).clone();
+        let mut current_policy = (*policy_tx.subscribe().borrow()).clone();
         let mut _degraded_flag = false;
 
         // 1. Dedicated Specialist Auditing (BSS-26)
         for specialist in &specialists {
             match specialist.check_health() {
-                HealthStatus::Degraded(msg) => {
-                    println!("[BSS-26] SPECIALIST ALERT ({}): {}", specialist.subsystem_id(), msg);
-                    let _ = specialist.execute_remediation("AUTO_FIX");
-                    _degraded_flag = true;
-                }
-                HealthStatus::Stalled => println!("[BSS-26] CRITICAL: {} STALLED", specialist.subsystem_id()),
                 HealthStatus::Degraded(msg) if specialist.subsystem_id() == "BSS-38" => {
                     // BSS-38 Workflow Integration: If pre-flight is degraded, force Shadow Mode.
                     println!("[BSS-26] PRE-FLIGHT WARNING: {}. Forcing Shadow Mode for safety.", msg);
@@ -667,6 +662,12 @@ async fn run_watchtower(
                     stats.is_shadow_mode_active.store(true, Ordering::SeqCst);
                     _degraded_flag = true;
                 }
+                HealthStatus::Degraded(msg) => {
+                    println!("[BSS-26] SPECIALIST ALERT ({}): {}", specialist.subsystem_id(), msg);
+                    let _ = specialist.execute_remediation("AUTO_FIX");
+                    _degraded_flag = true;
+                }
+                HealthStatus::Stalled => println!("[BSS-26] CRITICAL: {} STALLED", specialist.subsystem_id()),
                 HealthStatus::Optimal => {}
             }
         }
@@ -833,8 +834,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- SUBSYSTEM BSS-13: Bellman-Ford Strategy Task ---
     let strategy_graph = Arc::clone(&graph);
-    let solver_stats = Arc::clone(&watchtower_stats);
+    let solver_stats = Arc::clone(&wt_stats);
     let solver_opp_tx = opp_tx.clone();
+    let solver_watchtower_stats = Arc::clone(&watchtower_stats);
 
     std::thread::Builder::new()
         .name("brightsky-solver".to_string())
@@ -906,10 +908,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     
                     // BSS-34 Pre-flight Check: Ensure FlashExecutor.sol is active on the target chain.
                     // Gas check (BSS-33) removed: Running in Gasless Mode via Pimlico Paymaster.
-                    if !watchtower_stats.is_executor_deployed.load(Ordering::Relaxed) {
+                    if !solver_watchtower_stats.is_executor_deployed.load(Ordering::Relaxed) {
                         println!("[BSS-34] EXECUTOR NOT FOUND: Deployment required before execution.");
                         continue;
-                    } else if !watchtower_stats.is_bundler_online.load(Ordering::Relaxed) {
+                    } else if !solver_watchtower_stats.is_bundler_online.load(Ordering::Relaxed) {
                         println!("[BSS-35] BUNDLER OFFLINE: Account Abstraction pipeline failed.");
                         continue;
                     }

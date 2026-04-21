@@ -486,9 +486,8 @@ export async function scanForOpportunities(
         gasCostEth,
       );
 
-      console.log(
-        `[SCANNER] ${pair.tokenIn}/${pair.tokenOut} | spread: ${rawSpreadPct}% | loanSize: ${bestLoan.flashLoanSizeEth} ETH | grossProfit: ${bestLoan.grossProfit} ETH | gasCost: ${gasCostEth} ETH | netProfit: ${bestLoan.netProfit} ETH | margin: ${bestLoan.marginPct}%`,
-      );
+      const logMsg = `[SCANNER] ${pair.tokenIn}/${pair.tokenOut} | spread: ${rawSpreadPct}% | loanSize: ${bestLoan.flashLoanSizeEth} ETH | grossProfit: ${bestLoan.grossProfit} ETH | gasCost: ${gasCostEth} ETH | netProfit: ${bestLoan.netProfit} ETH | margin: ${bestLoan.marginPct}%`;
+      console.log(logMsg);
 
       // Minimum viable spread: net > 0 AND spread > DEX fee (0.03% for optimized stable swaps)
       if (bestLoan.netProfit > 0 && rawSpreadPct > 0.03) {
