@@ -7,3 +7,9 @@ dist
 *.log
 .env
 .env.*
+target
+**/target
+.pnpm-store
+**/.pnpm-store
+.cache
+**/.cache
