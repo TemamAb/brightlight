@@ -1,10 +1,10 @@
-FROM rust:1.80-slim AS rust-builder
+FROM rust:1.80-alpine AS rust-builder
 WORKDIR /app
 COPY Cargo.toml .
 COPY Cargo.lock .
 COPY main.rs .
 COPY bss_04_graph.rs .
-RUN apt-get update && apt-get install -y musl-dev musl-tools && rustup target add x86_64-unknown-linux-musl && cargo build --release --target x86_64-unknown-linux-musl
+RUN apk add --no-cache musl-dev && cargo build --release
 
 FROM node:22.12-alpine AS pnpm-builder
 ENV CI=true
