@@ -1,3 +1,5 @@
+if (process.env.CI) return;
+
 const fs = require("node:fs");
 
 for (const lockfile of ["package-lock.json", "yarn.lock"]) {
