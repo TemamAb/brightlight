@@ -4,6 +4,7 @@ use bss_04_graph::{GraphPersistence, PoolState};
 use std::sync::Arc;
 use serde_json::Value;
 use std::collections::HashMap;
+use tokio::io::AsyncReadExt;
 use std::thread;
 use tokio::sync::{mpsc, watch, RwLock};
 use tokio::time::{sleep, timeout, Duration};
@@ -331,7 +332,6 @@ impl SubsystemSpecialist for GaslessManager {
     fn upgrade_strategy(&self) -> &'static str { "Dynamic: URL updates via Nexus policy." }
     fn testing_strategy(&self) -> &'static str { "Connectivity: Bundler RPC JSON-RPC health check." }
     fn check_health(&self) -> HealthStatus {
-        if self.paymaster_active.load(Ordering::Relaxed) { HealthStatus::Optimal } else { HealthStatus::Stalled }
         if self.paymaster_active.load(Ordering::Relaxed) {
             HealthStatus::Optimal
         } else {
@@ -432,7 +432,7 @@ async fn run_api_gateway(stats: Arc<WatchtowerStats>, mut opp_rx: tokio::sync::b
             let mut opp_rx = opp_rx.resubscribe();
             tokio::spawn(async move {
                 let mut buffer = [0; 512];
-                let n = socket.try_read(&mut buffer).unwrap_or(0);
+                let n = socket.read(&mut buffer).await.unwrap_or(0);
                 let req_str = String::from_utf8_lossy(&buffer[..n]);
 
                 // If raw stream (Node.js IPC), pipe broadcast channel to socket

@@ -8,6 +8,15 @@ RUN cargo build --release
 # ─── STAGE 2: NODE.JS API BUILDER ─────────────────────────────────────────────
 FROM node:22-bookworm-slim AS node-builder
 WORKDIR /app
+
+# BSS-37: Install build dependencies required for native Node.js modules
+# Slim images lack the compilers necessary for building native extensions.
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@9 --activate
 COPY . .
 # Install dependencies and build workspaces
