@@ -4,7 +4,7 @@ COPY Cargo.toml .
 COPY Cargo.lock .
 COPY main.rs .
 COPY bss_04_graph.rs .
-RUN apk add --no-cache musl-dev && cargo build --release
+RUN cargo build --release
 
 FROM node:22.12-alpine AS pnpm-builder
 ENV CI=true
@@ -16,9 +16,9 @@ RUN pnpm install
 RUN pnpm --filter @workspace/api-server run build
 
 FROM node:22.12-alpine
-RUN apk add --no-cache dumb-init curl redis bash musl-dev
+RUN apk add --no-cache dumb-init curl redis bash
 WORKDIR /app
-COPY --from=rust-builder /app/target/x86_64-unknown-linux-musl/release/rust-backbone ./rust-backbone
+COPY --from=rust-builder /app/target/release/rust-backbone ./rust-backbone
 COPY --from=pnpm-builder /app/node_modules ./node_modules
 COPY --from=pnpm-builder /app/artifacts/api-server/dist ./dist
 COPY --from=pnpm-builder /app/lib ./lib
