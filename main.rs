@@ -8,8 +8,12 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::time::{Instant, Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use std::sync::atomic::AtomicBool;
-use tokio::sync::{mpsc, watch, RwLock, broadcast};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Mutex, RwLock};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+type HmacSha256 = Hmac<Sha256>;
+use tokio::sync::{mpsc, watch, broadcast};
 use tokio::time::{sleep, timeout};
 /// BSS-26: The Watchtower Framework & Health Definitions
 pub enum HealthStatus {
@@ -1374,6 +1378,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- SUBSYSTEM BSS-05: Reactive WebSocket Sync Layer ---
     // Elite-grade implementation: Replaces polling with event-driven subscriptions.
     let chains = vec![1, 8453, 42161, 137, 10];
+    // BSS-05: Dynamic Chain Subscription
+    // Respects the CHAIN_ID environment variable to focus ingestion on the execution target.
+    let target_chain = std::env::var("CHAIN_ID")
+        .unwrap_or_else(|_| "8453".to_string())
+        .parse::<u64>()
+        .unwrap_or(8453);
+    let chains = vec![target_chain];
+
     for chain_id in chains {
         let chain_tx = tx.clone();
         let chain_stats = Arc::clone(&watchtower_stats);
@@ -1391,6 +1403,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             intent: DebugIntent::Audit,
             params: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(), // dummy hex signature
             payload: None,
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            nonce: 12345,
         }).await;
     });
 
