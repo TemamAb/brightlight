@@ -10,7 +10,7 @@ use futures_util::StreamExt;
 /// Provides real-time event streaming using ethers-rs WebSocket transport.
 pub async fn subscribe_chain(
     chain_id: u64,
-    tx: mpsc::Sender<(Arc<str>, Arc<str>, PoolState)>,
+    tx: mpsc::Sender<(String, String, PoolState)>,
     stats: Arc<WatchtowerStats>,
 ) {
     // Elite Selection: Free/Permissionless public WebSocket endpoints
@@ -66,10 +66,10 @@ pub async fn subscribe_chain(
             // BSS-04 Resolution: We must pass the pool address to the solver 
             // so it can look up the TokenA/TokenB mapping in the DashMap.
             let update = (
-                Arc::from(format!("{:?}_0", pool_addr).as_str()), 
-                Arc::from(format!("{:?}_1", pool_addr).as_str()),
+                format!("{:?}_0", pool_addr),
+                format!("{:?}_1", pool_addr),
                 PoolState {
-                    pool_address: Arc::from(format!("{:?}", pool_addr).as_str()),
+                    pool_address: format!("{:?}", pool_addr),
                     reserve_0,
                     reserve_1,
                     fee_bps: 30, // Default for standard V2

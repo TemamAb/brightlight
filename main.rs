@@ -554,7 +554,7 @@ impl SubsystemSpecialist for WalletManager {
     fn testing_strategy(&self) -> &'static str { "Fuzzing: Nonce collision testing." }
     fn check_health(&self) -> HealthStatus { HealthStatus::Optimal }
     fn run_diagnostic(&self) -> Value { 
-        serde_json::json!({ "wallet_address": self.address, "cached_nonce": self.last_nonce.load(Ordering::Relaxed) }) 
+        serde_json::json!({ "wallet_address": self.address.as_ref(), "cached_nonce": self.last_nonce.load(Ordering::Relaxed) }) 
     }
     fn execute_remediation(&self, command: &str) -> Result<(), String> {
         if command == "SYNC_NONCE" {
@@ -657,7 +657,7 @@ impl SubsystemSpecialist for GaslessManager {
         }
     }
     fn run_diagnostic(&self) -> Value {
-        serde_json::json!({ "bundler_endpoint": self.bundler_url, "gasless_enabled": true })
+        serde_json::json!({ "bundler_endpoint": self.bundler_url.as_ref(), "gasless_enabled": true })
     }
     fn execute_remediation(&self, command: &str) -> Result<(), String> {
         if command == "RECONNECT_BUNDLER" {
@@ -1346,7 +1346,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     watchtower_stats.is_bundler_online.store(true, Ordering::Relaxed);
     // Initialize DeploymentEngine with a mock deployed address for demonstration
     // In a real scenario, this would be fetched from a deployment registry or deployed on startup.
-    let initial_executor_address = Arc::from("0x1234567890123456789012345678901234567890"); // Mock deployed address
+    let initial_executor_address: Arc<str> = Arc::from("0x1234567890123456789012345678901234567890");
     *watchtower_stats.flashloan_contract_address.write().unwrap() = Some(initial_executor_address.clone());
     
     // BSS-20: Broadcast channel for Node.js IPC Bridge Telemetry
@@ -1370,7 +1370,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // BSS-01/BSS-03: Multi-threaded message bus & IPC integration
     // Channel for receiving raw pool updates from BSS-05 (Sync Layer)
-    let (tx, mut rx) = mpsc::channel::<(Arc<str>, Arc<str>, PoolState)>(1000);
+    let (tx, mut rx) = mpsc::channel::<(String, String, PoolState)>(1000);
     
     // BSS-13: Solver Trigger
     // Elite Grade: Replaces the 10ms sleep loop with a reactive notify trigger.
