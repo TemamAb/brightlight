@@ -15,7 +15,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY main.rs ./
 COPY bss_*.rs ./
 
-RUN cargo build --release --bin brightsky-solver
+RUN cargo build --release --bin brightsky
 
 # ─── STAGE 2: Final Image ────────────────────────────────────────────────────
 FROM debian:bookworm-slim
@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/brightsky-solver ./brightsky
+COPY --from=builder /app/target/release/brightsky ./brightsky
 COPY artifacts/api-server/dist ./artifacts/api-server/dist
 COPY artifacts/api-server/package.json ./artifacts/api-server/package.json
 
