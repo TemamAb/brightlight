@@ -772,11 +772,15 @@ async function scanCycle() {
         }
       } else if (engineState.mode === "LIVE" && !engineState.liveCapable) {
         txHash = "0x" + crypto.randomBytes(32).toString("hex");
-        execMode = "LIVE"; // Simulate for profit generation
+        execMode = "SHADOW";
+        engineState.circuitBreaker = registerExecutionFailure(
+          engineState.circuitBreaker,
+          "LIVE mode requested without Pimlico or private RPC",
+        );
         await db.insert(streamEventsTable).values({
           id: genId("evt"),
           type: "SCANNING",
-          message: `[SIMULATION] Generating simulated profit for LIVE mode.`,
+          message: `[LIVE MODE BLOCKED] PIMLICO_API_KEY or RPC_ENDPOINT not set in Render env vars. Add them in Render Dashboard → Environment. Running SHADOW until configured.`,
           blockNumber,
           protocol: opp.protocol,
         });
