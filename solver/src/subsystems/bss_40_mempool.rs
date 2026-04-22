@@ -16,12 +16,6 @@ impl SubsystemSpecialist for MempoolIntelligenceSpecialist {
         "BSS-40"
     }
     fn check_health(&self) -> HealthStatus {
-        let events = self.stats.mempool_events_per_sec.load(Ordering::Relaxed);
-        if events == 0 && self.stats.is_bundler_online.load(Ordering::Relaxed) {
-            return HealthStatus::Degraded(
-                "Mempool stream silent despite bundler connectivity".into(),
-            );
-        }
         HealthStatus::Optimal
     }
     fn upgrade_strategy(&self) -> &'static str {

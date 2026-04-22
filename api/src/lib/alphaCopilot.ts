@@ -70,14 +70,16 @@ export class AlphaCopilot {
    * over the high-speed TCP bridge (Port 4001).
    */
   public async dispatchSignedOrder(order: any): Promise<string> {
+    const socketPath =
+      process.env.BRIGHTSKY_SOCKET_PATH || "/tmp/brightsky_bridge.sock";
     const port = parseInt(process.env.INTERNAL_BRIDGE_PORT || "4001");
     logger.info(
-      { target: order.target, intent: order.intent, port, nonce: order.nonce }, 
-      "BSS-03: Dispatching signed order to backbone via TCP bridge"
+      { target: order.target, intent: order.intent, port, socketPath, nonce: order.nonce }, 
+      "BSS-03: Dispatching signed order to backbone"
     );
 
     return new Promise((resolve, reject) => {
-      const client = net.createConnection({ port, host: "127.0.0.1" }, () => {
+      const client = net.createConnection({ path: socketPath }, () => {
         client.write(JSON.stringify(order));
       });
 
@@ -86,8 +88,29 @@ export class AlphaCopilot {
         client.end();
       });
 
-      client.on("error", (err) => {
-        reject(err);
+      client.on("error", () => {
+        const fallbackClient = net.createConnection(
+          { port, host: "127.0.0.1" },
+          () => {
+            fallbackClient.write(JSON.stringify(order));
+          },
+        );
+
+        fallbackClient.on("data", (data) => {
+          resolve(data.toString());
+          fallbackClient.end();
+        });
+
+        fallbackClient.on("error", (err) => {
+          reject(err);
+        });
+
+        fallbackClient.on("timeout", () => {
+          fallbackClient.end();
+          reject(new Error("Bridge connection timed out"));
+        });
+
+        fallbackClient.setTimeout(5000);
       });
 
       client.on("timeout", () => {

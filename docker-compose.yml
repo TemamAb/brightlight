@@ -1,17 +1,92 @@
-version: "3.8"
 services:
-  brightsky:
-    build: .
-    ports:
-      - "3000:3000"
+  postgres:
+    image: postgres:16-alpine
     environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - INTERNAL_BRIDGE_PORT=4001
-      # Add other env vars as needed
+      POSTGRES_DB: brightsky
+      POSTGRES_USER: brightsky
+      POSTGRES_PASSWORD: brightsky
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD-SHELL", "pg_isready -U brightsky -d brightsky"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - brightsky-postgres:/var/lib/postgresql/data
+
+  solver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PRE_FLIGHT_STRICT: "false"
+      INTERNAL_BRIDGE_PORT: "4001"
+      BRIGHTSKY_SOCKET_PATH: /ipc/brightsky_bridge.sock
+      EXECUTOR_CODE_HASH: "0x6f2a4c10da345e0d48f2b1c93a9b1e7f3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
+      CHAIN_ID: "8453"
+      PIMLICO_NETWORK: base
+      MAX_PAIRS_TO_SCAN: "2500"
+      SCAN_CONCURRENCY: "8"
+      MEV_PROTECTION: "true"
+      FLASH_LOAN_MAX: "100000000"
+    volumes:
+      - brightsky-ipc:/ipc
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "10000:10000"
+    environment:
+      NODE_ENV: development
+      PORT: "10000"
+      DATABASE_URL: postgresql://brightsky:brightsky@postgres:5432/brightsky
+      INTERNAL_BRIDGE_PORT: "4001"
+      BRIGHTSKY_SOCKET_PATH: /ipc/brightsky_bridge.sock
+      PRE_FLIGHT_STRICT: "false"
+      PAPER_TRADING_MODE: "false"
+      SUDO_CONFIRMATION_ENABLED: "false"
+      EXECUTOR_CODE_HASH: "0x6f2a4c10da345e0d48f2b1c93a9b1e7f3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
+      CHAIN_ID: "8453"
+      PIMLICO_NETWORK: base
+      MAX_PAIRS_TO_SCAN: "2500"
+      SCAN_CONCURRENCY: "8"
+      MEV_PROTECTION: "true"
+      FLASH_LOAN_MAX: "100000000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      solver:
+        condition: service_started
+    volumes:
+      - brightsky-ipc:/ipc
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:10000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:10000
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  brightsky-ipc:
+  brightsky-postgres:
