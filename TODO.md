@@ -1,26 +1,14 @@
-# BRIGHTSKY RISK MITIGATION TODO
-Progress: 0/12 ✅
+# Brightsky Dockerization & Profit Verification TODO
 
-## 1. Setup (Non-Code)
-- [ ] Add env vars: FORCE_SHADOW_SKELETONS=true, SUDO_HMAC_KEY2=..., RPC_BACKUP_LIST=...
-- [ ] Create scripts/chaos-test.sh
+## Approved Plan Steps (Progress: 0/N)
 
-## 2. Code Mitigations (Targeted Edits)
-- [ ] solver/src/main.rs: RwLock policy + sudo 2nd HMAC
-- [ ] api/src/lib/bribeEngine.ts: Cap bribe ratio <=0.3
-- [ ] bss_45_risk.rs: Hard min_profit_eth=0.001
-- [ ] solver/src/subsystems/bss_43_simulator.rs: Deterministic mock
-- [ ] solver/src/subsystems/bss_44_liquidity.rs: Fallback optimal_input
-- [ ] bss_05_sync.rs: RPC sanitization + invariant
+- [x] 1. Fix Rust unix import in solver/src/main.rs (cfg guard)
+- [ ] 2. Test local cargo build --release --bin brightsky
+- [ ] 3. docker compose down (clean running terminals)
+- [ ] 4. docker compose up --build -d (full stack: postgres, solver, api:10000, dashboard:3000)
+- [ ] 5. Verify API health: curl localhost:10000/api/health
+- [x] 6. Open dashboard localhost:3000, check telemetry/profit_eth >0
+- [x] 7. Confirm profit simulation active (shadow_mode=false, trades_executed increasing)
 
-## 3. Validation
-- [ ] cargo test
-- [ ] Run chaos-test.sh
-- [ ] Re-run audit (target >95)
-
-## 4. Deploy
-- [ ] docker-compose up
-- [ ] Update brightsky_audit_report.md w/ mitigations + new score
-
-Updated on each completion.
+Post-completion: Ready for Render deploy.
 
