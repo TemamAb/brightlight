@@ -1,86 +1,118 @@
-# ─── STAGE 1: RUST PLANNER (Cargo Chef) ───────────────────────────────────────
-FROM lukemathwalker/cargo-chef:0.1.68-rust-1.82-bookworm AS chef
+# syntax=docker/dockerfile:1
+# ─── STAGE 1: Rust Builder (Stable 1.85, with cargo-chef) ────────────────────────
+FROM rust:1.85-slim AS rust-builder
 
-# BSS-37: Install build dependencies + solc/protoc for ethers abigen + protos
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev build-essential cmake ca-certificates git clang llvm libclang-dev \
-    solc protobuf-compiler libprotobuf-dev \
+# Install cargo-chef for dependency caching
+RUN cargo install cargo-chef
+
+# Install all deps for ethers-rs v2 abigen + crypto/web3 build
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
+    protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# ─── STAGE 2: RUST RECIPE ─────────────────────────────────────────────────────
-FROM chef AS planner
-COPY . .
+# Prepare recipe for dependency caching
+FROM rust:1.85-slim AS planner
+RUN cargo install cargo-chef
+COPY Cargo.toml Cargo.lock ./
 RUN cargo chef prepare --recipe-path recipe.json
 
-# ─── STAGE 3: RUST BUILDER ────────────────────────────────────────────────────
-FROM chef AS rust-builder
+FROM rust:1.85-slim AS cacher
+RUN cargo install cargo-chef
 COPY --from=planner /app/recipe.json recipe.json
-
-# Build dependencies (cached layer) - Fix for abigen solc fetch
-ENV CARGO_BUILD_JOBS=1 \
-    RUSTFLAGS="-C target-cpu=native -C link-arg=-s"
 RUN cargo chef cook --release --recipe-path recipe.json
 
-# Verify recipe worked
-RUN ls -la recipe.json && cat recipe.json | head -10
-
-# Build application
-COPY . .
-RUN cargo build --release && \
-    strip target/release/brightsky-solver
-
-# ─── STAGE 4: NODE.JS API BUILDER ─────────────────────────────────────────────
-FROM node:22-bookworm-slim AS node-builder
-WORKDIR /app
+# Build stage
+FROM rust:1.85-slim AS builder
 RUN apt-get update && apt-get install -y \
-    python3 make g++ \
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
+    protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@9 --activate
-COPY . .
-RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @workspace/db run build
-RUN pnpm --filter @workspace/api-server run build
-
-# ─── STAGE 5: RUNTIME ─────────────────────────────────────────────────────────
-FROM node:22-bookworm-slim
 WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY --from=cacher /app/target target
+COPY --from=cacher $CARGO_HOME $CARGO_HOME
 
-# Enable Corepack to ensure pnpm is available for the preDeployCommand (BSS-38)
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Copy real source
+COPY src ./src
+COPY bss_*.rs ./
+RUN cargo build --release --bin brightsky-solver
 
-# Install system dependencies for networking and health checks
+# ─── STAGE 3: Node Frontend Build ────────────────────────
+FROM node:22-bookworm-slim AS node-builder
+
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY artifacts/brightsky/package.json artifacts/brightsky/
+COPY lib/api-client-react/package.json lib/api-client-react/
+# Add other workspace packages if needed
+
+RUN corepack enable && pnpm install --frozen-lockfile
+
+COPY artifacts/brightsky ./artifacts/brightsky
+COPY lib/api-client-react ./lib/api-client-react
+# Pre-built API types
+COPY lib/api-zod ./lib/api-zod
+
+WORKDIR /app/artifacts/brightsky
+RUN pnpm build
+
+# ─── STAGE 3: Node Frontend Build ────────────────────────
+FROM node:22-bookworm-slim AS node-builder
+
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY artifacts/brightsky/package.json artifacts/brightsky/
+COPY lib/api-client-react/package.json lib/api-client-react/
+# Add other workspace packages if needed
+
+RUN corepack enable && pnpm install --frozen-lockfile
+
+COPY artifacts/brightsky ./artifacts/brightsky
+COPY lib/api-client-react ./lib/api-client-react
+# Pre-built API types
+COPY lib/api-zod ./lib/api-zod
+
+WORKDIR /app/artifacts/brightsky
+RUN pnpm build
+
+# ─── STAGE 4: Final Multi-Service Image ──────────────────
+FROM debian:bookworm-slim
+
+# Install runtime deps
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    curl \
-    netcat-traditional \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
 # Copy Rust binary
-COPY --from=rust-builder /app/target/release/brightsky-solver /usr/local/bin/brightsky-solver
+COPY --from=builder /app/target/release/brightsky-solver ./brightsky
 
-# Copy Node.js artifacts
-COPY --from=node-builder /app/package.json ./
-COPY --from=node-builder /app/pnpm-lock.yaml ./
-COPY --from=node-builder /app/pnpm-workspace.yaml ./
-COPY --from=node-builder /app/node_modules ./node_modules
-COPY --from=node-builder /app/artifacts/api-server ./artifacts/api-server
-COPY --from=node-builder /app/lib ./lib
+# Copy frontend build
+COPY --from=node-builder /app/artifacts/brightsky/dist ./artifacts/brightsky/dist
 
-# BSS-38: Inject Pre-flight Script
-COPY scripts/preflight.sh /usr/local/bin/preflight
-RUN chmod +x /usr/local/bin/preflight
+# Expose ports (Rust API:4001, Frontend:3000)
+EXPOSE 3000 4001
 
-# Environment defaults
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV INTERNAL_BRIDGE_PORT=4001
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:4001/health || exit 1
 
-EXPOSE ${PORT}
-EXPOSE ${INTERNAL_BRIDGE_PORT}
+# Multi-service entrypoint
+CMD ["sh", "-c", "\
+    echo 'Starting Rust API on :4001...' && \
+    ./brightsky & \
+    echo 'Starting frontend server...' && \
+    cd artifacts/brightsky && \
+    npx serve -s dist -l 3000 && \
+    wait"]
 
-# The entrypoint runs pre-flight checks before launching the dual-engine stack
-ENTRYPOINT ["/usr/local/bin/preflight"]
-CMD ["sh", "-c", "brightsky-solver & node artifacts/api-server/dist/index.js"]

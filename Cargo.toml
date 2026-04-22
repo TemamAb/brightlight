@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "brightsky-solver"
+name = "brightsky"
 path = "main.rs"
 
 [dependencies]

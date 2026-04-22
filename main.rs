@@ -1,5 +1,6 @@
 mod bss_04_graph;
 mod bss_05_sync;
+mod bss_13_solver;
 
 use bss_04_graph::{GraphPersistence, PoolState};
 use serde::{Serialize, Deserialize};

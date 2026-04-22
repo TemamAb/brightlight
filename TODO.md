@@ -1,14 +1,14 @@
-# BrightSky Docker Fix TODO
-✅ Status: Dockerfile hardened (solc/protoc + verification).
+# Brightsky Docker Fix Progress
 
-## Steps (1/5 Complete)
+## Approved Plan Steps:
+- [x] Create rust-toolchain.toml (Rust 1.75 pinned)
+- [x] Create .dockerignore (clean build context)
+- [x] Rewrite Dockerfile (rust:1.75-slim + node:22-bookworm-slim, no cargo-chef)
+- [ ] Test: docker build --no-cache -t brightsky:test .
+- [ ] Test run: docker run -p 3000:3000 -p 4001:4001 brightsky:test
+- [ ] Update Render service to use Docker (remove build/start commands)
+- [ ] Verify production deploy
 
-### 1. ✅ Create hardened Dockerfile [COMPLETE]
-### 2. [ ] User verifies `docker build .`
-### 3. [ ] Test runtime: `docker run ...`
-### 4. [ ] Update Cargo.toml: disable abigen if unused (optional perf)
-### 5. [ ] [COMPLETE] Remove TODO.md
-
-**Next**: Run `docker build -t brightsky .` to verify fix. If successful, Docker cargo-chef error resolved!
+**Next: Test docker build locally**
 
 
