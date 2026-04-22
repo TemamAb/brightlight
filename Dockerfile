@@ -31,7 +31,25 @@ COPY main.rs ./
 COPY bss_*.rs ./
 RUN cargo build --release --bin brightsky-solver
 
-# ─── STAGE 4: Final Image ──────────────────
+# ─── STAGE 4: Node.js API Server Build ────────────────────────────────────────
+FROM node:22-bookworm-slim AS node-builder
+
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY artifacts/api-server/package.json artifacts/api-server/
+COPY lib/db/package.json lib/db/
+COPY lib/api-zod/package.json lib/api-zod/
+
+RUN corepack enable && pnpm install --frozen-lockfile
+
+COPY artifacts/api-server ./artifacts/api-server
+COPY lib/db ./lib/db
+COPY lib/api-zod ./lib/api-zod
+
+WORKDIR /app/artifacts/api-server
+RUN node ./build.mjs
+
+# ─── STAGE 5: Final Image ────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -42,24 +60,30 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy pre-built Rust binary
+# Copy Rust solver binary
 COPY --from=builder /app/target/release/brightsky-solver ./brightsky
 
-# Copy pre-built frontend (already built locally in artifacts/brightsky/dist)
-COPY artifacts/brightsky/dist ./artifacts/brightsky/dist
+# Copy Node.js API server
+COPY --from=node-builder /app/artifacts/api-server/dist ./artifacts/api-server/dist
+COPY --from=node-builder /app/artifacts/api-server/package.json ./artifacts/api-server/
 
-# Expose ports (Rust API:4001, Frontend:3000)
-EXPOSE 3000 4001
+# Install Node.js for running the API server
+COPY --from=node-builder /usr/local/bin/node /usr/local/bin/
+COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/
+ENV NODE_PATH=/usr/local/lib/node_modules
+
+# Expose API port
+EXPOSE 3000
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:4001/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Multi-service entrypoint
+# Start both services: Rust solver first, then Node.js API
 CMD ["sh", "-c", "\
-    echo 'Starting Rust API on :4001...' && \
+    echo 'Starting BrightSky Solver...' && \
     ./brightsky & \
-    echo 'Starting frontend server...' && \
-    cd artifacts/brightsky && \
-    npx serve -s dist -l 3000 && \
+    echo 'Starting API Server on :3000...' && \
+    cd artifacts/api-server && \
+    node ./dist/index.mjs && \
     wait"]
