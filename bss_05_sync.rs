@@ -1,4 +1,6 @@
 use ethers::prelude::*;
+use ethers::providers::{Provider};
+use ethers::types::Filter;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use crate::bss_04_graph::PoolState;
@@ -27,7 +29,7 @@ pub async fn subscribe_chain(
     };
 
     // BSS-05 TRAINING: ethers v2 API - Provider::connect returns Provider, not Result
-    let provider = match Provider::connect(ws_url).await {
+let provider: Arc<Provider<ethers::providers::Ws>> = match Provider::connect(ws_url).await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!("[BSS-05] WS Connection error: {}", e);

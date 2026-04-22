@@ -5,7 +5,7 @@ mod bss_05_sync;
 use bss_04_graph::{GraphPersistence, PoolState};
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -584,7 +584,7 @@ impl SubsystemSpecialist for DeploymentEngine {
         }
     }
     fn run_diagnostic(&self) -> Value {
-        let addr = self.stats.flashloan_contract_address.read().unwrap().clone();
+        let _addr = self.stats.flashloan_contract_address.read().unwrap().clone();
         serde_json::json!({ "chain_id": self.target_chain, "contract_ready": true })
     }
     fn execute_remediation(&self, command: &str) -> Result<(), String> {
@@ -932,7 +932,11 @@ async fn run_api_gateway(
     // Replaces TCP with UDS to shave ~0.5ms off IPC latency.
     let socket_path = "/tmp/brightsky_bridge.sock";
     let _ = std::fs::remove_file(socket_path); // Clean up stale socket
-    let listener = tokio::net::UnixListener::bind(socket_path).expect("[BSS-06] Failed to bind UDS socket");
+let listener = if cfg!(unix) {
+    tokio::net::UnixListener::bind(socket_path).expect("[BSS-06] UDS socket active")
+} else {
+    panic!("[BSS-06] Unix sockets not supported on Windows - use TCP:4001");
+};
     println!("[BSS-06] Telemetry Gateway active on UDS: {} (Protected)", socket_path);
     
     loop {
