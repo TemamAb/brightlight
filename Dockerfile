@@ -30,16 +30,7 @@ COPY main.rs ./
 COPY bss_*.rs ./
 RUN cargo build --release --bin brightsky-solver
 
-# ─── STAGE 4: Node Runtime ──────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS node-runtime
-
-# Copy pre-built API server from host (built locally)
-WORKDIR /app
-COPY artifacts/api-server/dist ./artifacts/api-server/dist
-COPY artifacts/api-server/package.json ./artifacts/api-server/
-COPY artifacts/api-server/node_modules ./artifacts/api-server/node_modules
-
-# ─── STAGE 5: Final Image ────────────────────────────────────────────────────
+# ─── STAGE 4: Final Image ────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -50,17 +41,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy Rust solver
+# Copy Rust solver binary
 COPY --from=builder /app/target/release/brightsky-solver ./brightsky
 
-# Copy Node runtime from node stage
-COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/
-COPY --from=node-runtime /usr/local/bin/npm /usr/local/bin/
-COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules/
-COPY --from=node-runtime /app/artifacts /app/artifacts
+# Copy pre-built API server dist files
+COPY artifacts/api-server/dist ./artifacts/api-server/dist
 
-ENV NODE_PATH=/usr/local/lib/node_modules
-ENV PORT=3000
+# Copy package.json for npm install on startup
+COPY artifacts/api-server/package.json ./artifacts/api-server/package.json
+
+# Install Node.js from official binaries (no package manager needed)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Expose API port
 EXPOSE 3000
@@ -71,7 +64,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 CMD ["sh", "-c", "\
     echo 'Starting BrightSky Solver...' && \
     ./brightsky & \
+    echo 'Installing API server dependencies...' && \
+    cd artifacts/api-server && npm install --omit=dev --ignore-scripts && \
     echo 'Starting API Server on :3000...' && \
-    cd artifacts/api-server && \
     node ./dist/index.mjs && \
     wait"]
