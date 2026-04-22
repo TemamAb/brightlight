@@ -23,13 +23,13 @@ Approved by External Audit (9.2/10 Rating)
    - main.rs: Solver thread → core 4 affinity
 
 ### 5. **Dashboard Glassmorphism** (BSS-27)
-   - artifacts/brightsky/src/index.css: Add glass effects
+   - ui/src/index.css: Add glass effects
 
 ## Dependent Files
 - Cargo.toml
-- main.rs
-- bss_04_graph.rs
-- artifacts/brightsky/src/index.css
+- solver/src/main.rs
+- solver/src/subsystems/bss_04_graph.rs
+- ui/src/index.css
 
 ## Follow-up Steps
 1. Apply edits

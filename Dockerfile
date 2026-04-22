@@ -12,9 +12,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-COPY main.rs ./
-COPY bss_*.rs ./
+COPY solver/Cargo.toml solver/Cargo.lock ./
+COPY solver/src/main.rs ./main.rs
+COPY solver/src/bss_*.rs ./
+COPY solver/src/subsystems/*.rs ./
+COPY solver/src/lib.rs ./
+COPY solver/src/subsystems/mod.rs ./
 
 RUN cargo build --release --bin brightsky
 

@@ -19,9 +19,8 @@ brightsky/ (Monorepo Root)
 │       ├── bss_05_sync.rs (WebSocket sync)
 │       ├── bss_13_solver.rs (Bellman-Ford SPFA)
 │       └── mod.rs (module registry)
-├── artifacts/ (Generated Apps)
-│   ├── api-server/ (Node.js BSS-06 Telemetry)
-│   └── brightsky/ (React BSS-27 Dashboard)
+├── api/ (Node.js BSS-06 Telemetry)
+│   └── ui/ (React BSS-27 Dashboard)
 └── scripts/ (DevOps - BSS-38 Preflight)
 ```
 
@@ -50,11 +49,11 @@ lib/ (Shared - 42 files, 28KB)
 ├── db/ (Drizzle schema)
 └── api-client-react/ (React hooks)
 
-artifacts/api-server/ (Node Backend - 28 files, 18KB)
+api/ (Node Backend - 28 files, 18KB)
 ├── src/routes/ (BSS-06 Telemetry endpoints)
 └── src/lib/ (Copilot, Scanner)
 
-artifacts/brightsky/ (React UI - 62 files, 85KB)
+ui/ (React UI - 62 files, 85KB)
 ├── src/pages/ (Dashboard, Vault, AuditReport)
 └── src/components/ui/ (Shadcn full kit)
 
