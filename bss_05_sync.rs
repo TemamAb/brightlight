@@ -1,5 +1,4 @@
 use ethers::prelude::*;
-use ethers::providers::Ws;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use crate::bss_04_graph::PoolState;
@@ -27,7 +26,7 @@ pub async fn subscribe_chain(
         }
     };
 
-    let connection = Ws::connect(ws_url).await;
+    let connection = Provider::connect(ws_url).await;
     let provider = match connection {
         Ok(ws) => Arc::new(Provider::new(ws).interval(std::time::Duration::from_millis(200))),
         Err(e) => {

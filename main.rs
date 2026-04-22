@@ -1363,6 +1363,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start Watchtower
     let wt_stats = Arc::clone(&watchtower_stats);
     let wt_graph = Arc::clone(&graph);
+    let wt_stats_for_solver = Arc::clone(&wt_stats);
     tokio::spawn(async move { run_watchtower(wt_stats, wt_graph, policy_tx, debug_rx).await; });
 
     // Start BSS-16 Mempool Monitor
@@ -1424,7 +1425,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- SUBSYSTEM BSS-13: Bellman-Ford Strategy Task ---
     let strategy_graph = Arc::clone(&graph);
-    let solver_stats = Arc::clone(&wt_stats);
+    let solver_stats = wt_stats_for_solver;
     let solver_opp_tx = opp_tx.clone();
     let solver_watchtower_stats = Arc::clone(&watchtower_stats);
     let solver_wait_trigger = Arc::clone(&solver_trigger);
