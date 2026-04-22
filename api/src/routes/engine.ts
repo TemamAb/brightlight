@@ -68,6 +68,7 @@ async function detectLiveCapability(): Promise<{
   // KPI 19: Environment-first detection. Settings Hub now updates process.env directly.
   const pimlicoApiKey = process.env["PIMLICO_API_KEY"] ?? null;
   const rpcEndpoint = process.env["RPC_ENDPOINT"] ?? null;
+  const executorAddress = process.env["FLASH_EXECUTOR_ADDRESS"] ?? null;
 
   const hasPimlicoKey = !!pimlicoApiKey;
   const hasPrivateRpc = !!rpcEndpoint;
@@ -96,7 +97,7 @@ async function detectLiveCapability(): Promise<{
         hasPrivateRpc,
         pimlicoApiKey,
         rpcEndpoint,
-        liveCapable: false,
+        liveCapable: false, // Requires both Pimlico AND Private RPC
       };
     }
   }
@@ -106,7 +107,7 @@ async function detectLiveCapability(): Promise<{
     hasPrivateRpc,
     pimlicoApiKey,
     rpcEndpoint,
-    liveCapable: hasPimlicoKey && hasPrivateRpc,
+    liveCapable: hasPimlicoKey && hasPrivateRpc && !!executorAddress,
   };
 }
 
@@ -146,7 +147,11 @@ function genId(prefix: string) {
 // ─── KPI 1: Rust IPC Bridge (Listener) ─────────────────────────────────────────
 function connectToRustBridge(retryCount = 0) {
   const socketPath = "/tmp/brightsky_bridge.sock";
-  const maxRetries = 10;
+  const maxRetries = 50; // Increased for Render cold-starts
+
+  if (!require('fs').existsSync(socketPath) && retryCount < maxRetries) {
+    return setTimeout(() => connectToRustBridge(retryCount + 1), 500);
+  }
 
   const socket = net.connect(socketPath, () => {
     logger.info(
@@ -666,7 +671,20 @@ async function scanCycle() {
         );
       }
 
-      if ((simulationMode && !simulation.ok) || !onChainSim.success) {
+      // BSS-45: Cross-Check Validation (Anti-Capital Loss)
+      // Verify that the RPC simulation profit aligns with our internal RiskEngine math.
+      // If a malicious RPC claims a huge profit that our internal oracle doesn't see, reject.
+      const internalExpectationUsd = bribeAnalysis.netProfit * ethPrice;
+      const simulationProfitUsd = simulation.estimatedNetProfitEth * ethPrice;
+      const isSimulationForced = Math.abs(simulationProfitUsd - internalExpectationUsd) > (internalExpectationUsd * 0.5);
+
+      if (onChainSim.success && isSimulationForced && engineState.mode === "LIVE") {
+        onChainSim.success = false;
+        onChainSim.error = "BSS-45: Simulation anomaly detected. RPC profit deviates >50% from Internal Oracle.";
+        logger.error({ internalExpectationUsd, simulationProfitUsd }, "Simulation Hijack Attempt Blocked");
+      }
+
+      if ((simulationMode && !simulation.ok) || (onChainSim && !onChainSim.success)) {
         const reason = !onChainSim.success
           ? `Revert: ${onChainSim.error}`
           : simulation.reason;
@@ -769,8 +787,10 @@ async function scanCycle() {
         txHash = "0x" + crypto.randomBytes(32).toString("hex");
         execMode = "SHADOW";
       }
-
-      const latencyMs = Date.now() - t0 + 40;
+      
+      // BSS-01: Real Internal Latency Measurement (KPI 1)
+      // Removing the artificial +40ms penalty to reflect actual engine performance.
+      const latencyMs = Date.now() - t0;
 
       await db.insert(streamEventsTable).values({
         id: genId("evt"),

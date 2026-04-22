@@ -57,8 +57,9 @@ export class BrightSkyBribeEngine {
 
     let dynamicBribeRatio = this.CONFIG.BRIBE_RATIO;
     if (successProb < 0.6) {
-      dynamicBribeRatio *= 1.5; 
-      console.log("[BSS-17] Competitive threat detected. Escalating bribe ratio.");
+      dynamicBribeRatio *= 1.5;
+      dynamicBribeRatio = Math.min(dynamicBribeRatio, 0.3); // BSS Audit Mitig: Bribe cap anti-loop
+      console.log("[BSS-17] Competitive threat detected. Escalating bribe ratio (capped).");
     }
 
     const ev = this.calculateExpectedValue(profit, successProb, gasCost);

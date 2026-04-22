@@ -30,12 +30,16 @@ services:
         value: "3000"
       - key: INTERNAL_BRIDGE_PORT
         value: "4001"
+      # BSS-32: Secondary Security Gate. 
+      # Even if DASHBOARD_PASS is leaked, code-modifying intents remain locked unless this is true.
+      - key: SUDO_CONFIRMATION_ENABLED
+        value: "false"
       - key: PRE_FLIGHT_STRICT
         value: "true"
       - key: DASHBOARD_USER
         sync: false # Set in Render Dashboard
       - key: DASHBOARD_PASS
-        generateValue: true
+        sync: false # FORCE MANUAL SETTING FOR BSS-32 INTEGRITY
       - key: REDIS_URL
         value: redis://localhost:6379
       - key: DATABASE_URL

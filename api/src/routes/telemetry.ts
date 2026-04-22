@@ -63,6 +63,7 @@ router.get("/telemetry", async (req, res) => {
 
   // Real latency from actual DB records (measured, not simulated)
   // We filter out 0 or null values to ensure the P99 is not skewed by skipped scans
+  const INTERNAL_LATENCY_TARGET_MS = 40;
   const latencies = executed
     .filter(
       (t: any) => t.latencyMs != null && parseFloat(t.latencyMs as string) > 0,
@@ -150,7 +151,8 @@ router.get("/telemetry", async (req, res) => {
           return {
             subsystem: kpi.id,
             kpi: metrics.kpi,
-            design: target,
+            // Reflecting the design target from KPI 1
+            design: kpi.id === "BSS-13" ? 10 : (kpi.id === "BSS-03" ? 40 : target),
             operational: actual,
             gap: Math.min(100, efficiency).toFixed(1) + "%",
           };

@@ -1,11 +1,11 @@
-# BrightSky Directory Documentation
+# BrightSky Directory Documentation    
 
 ## 🎯 Organizational Principles
 1. **Domain Separation**: `lib/` (shared), `solver/` (Rust core), `artifacts/` (apps)
 2. **Rust Hybrid**: Subsystem agents (BSS-##) in `main.rs` → Pure modules in `subsystems/`
 3. **Monorepo**: pnpm workspaces (`pnpm-workspace.yaml`)
-4. **Immutable Infra**: Docker multi-stage (BSS-37)
-5. **39 Subsystems**: BSS-26 Nexus registry orchestrates all
+4. **Immutable Infra**: Docker multi-stage (BSS-37) - *Enhanced with preflight checks*
+5. **46 Subsystems**: BSS-26 Nexus registry orchestrates all - *Expanded for elite arbitrage*
 
 ## 📊 Organizational Chart
 ```

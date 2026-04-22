@@ -1,34 +1,26 @@
-# Brightsky-Solver Debug & Fix Tracking
-Current Working Directory: c:/Users/op/Desktop/brightsky
+# BRIGHTSKY RISK MITIGATION TODO
+Progress: 0/12 ✅
 
-## Approved Plan Status: PENDING USER CONFIRMATION
+## 1. Setup (Non-Code)
+- [ ] Add env vars: FORCE_SHADOW_SKELETONS=true, SUDO_HMAC_KEY2=..., RPC_BACKUP_LIST=...
+- [ ] Create scripts/chaos-test.sh
 
-### 1. [x] BSS-05 Ethers Provider Fix (CRITICAL)
-   - File: bss_05_sync.rs 
-   - Change: `Provider::connect(ws_url)` → `Ws::connect(ws_url).await` + import fix
+## 2. Code Mitigations (Targeted Edits)
+- [ ] solver/src/main.rs: RwLock policy + sudo 2nd HMAC
+- [ ] api/src/lib/bribeEngine.ts: Cap bribe ratio <=0.3
+- [ ] bss_45_risk.rs: Hard min_profit_eth=0.001
+- [ ] solver/src/subsystems/bss_43_simulator.rs: Deterministic mock
+- [ ] solver/src/subsystems/bss_44_liquidity.rs: Fallback optimal_input
+- [ ] bss_05_sync.rs: RPC sanitization + invariant
 
-### 2. [x] BSS-21 Unused Import Cleanup (WARNING)  
-   - File: main.rs line 8
-   - Change: Remove `json` from `use serde_json::{Value, json};`
+## 3. Validation
+- [ ] cargo test
+- [ ] Run chaos-test.sh
+- [ ] Re-run audit (target >95)
 
-### 3. [x] BSS-34 Unused Variable Fix (WARNING)
-   - File: main.rs line 587
-   - Change: `let addr` → `let _addr`
+## 4. Deploy
+- [ ] docker-compose up
+- [ ] Update brightsky_audit_report.md w/ mitigations + new score
 
-## Follow-up After Edits:
-### 4. [ ] Test Compilation
-   ```bash
-   cargo check
-   cargo build --release --bin brightsky
-   ```
-
-### 5. [ ] Docker Test
-   ```bash
-   docker build -t brightsky-test .
-   ```
-
-### 6. [ ] Completion
-   Mark all complete and run `attempt_completion`
-
-**Next Step**: Confirm plan → Proceed with parallel `edit_file` operations.
+Updated on each completion.
 

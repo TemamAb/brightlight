@@ -12,6 +12,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import * as net from "net";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,22 @@ router.get("/health", async (_req, res) => {
     const hasRpc = !!process.env.RPC_ENDPOINT;
     const isStrict = process.env.PRE_FLIGHT_STRICT === "true";
     
+    // BSS-38: Validate IPC Bridge Connectivity
+    const bridgePort = parseInt(process.env.INTERNAL_BRIDGE_PORT || "4001");
+    const isBridgeAlive = await new Promise<boolean>((resolve) => {
+      const socket = net.createConnection({ port: bridgePort, host: "127.0.0.1" });
+      socket.setTimeout(500);
+      socket.on("connect", () => {
+        socket.end();
+        resolve(true);
+      });
+      socket.on("error", () => resolve(false));
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+
     // Diagnostics: Check for common typos in the environment
     const envKeys = Object.keys(process.env).filter(
       k => k.toLowerCase().includes('database') || k.toLowerCase().includes('db_') || k.toLowerCase().includes('postgres')
@@ -47,6 +64,7 @@ router.get("/health", async (_req, res) => {
         status: "error",
         db: "not_initialized",
         env_var_present: hasAnyDbUrl,
+        bridge_alive: isBridgeAlive,
         message: hasAnyDbUrl
           ? "Database variable exists but client failed to initialize. Check @workspace/db logic."
           : "No database URL found in primary or fallback environment variables.",
@@ -62,6 +80,7 @@ router.get("/health", async (_req, res) => {
     res.json({
       status: "ok",
       db: "connected",
+      bridge_alive: isBridgeAlive,
       preflight_strict: isStrict,
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
