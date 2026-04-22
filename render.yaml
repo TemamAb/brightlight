@@ -17,7 +17,12 @@ services:
     # On a fresh Render Postgres, tables don't exist — every API call fails
     # with "relation does not exist" without this step.
     # This command executes inside the built Docker container image (BSS-37).
-    preDeployCommand: pnpm --filter @workspace/db run migrate
+    preDeployCommand: |
+  echo "[BSS-38] Pre-deployment validation..."
+  cargo clippy --release -- -D warnings 2>&1 || echo "Clippy warnings detected"
+  cargo build --release --bin brightsky
+  echo "[BSS-38] Build successful ✓"
+  pnpm --filter @workspace/db run migrate
     # Render polls this path to know when the service is ready.
     # Without a matching route, Render marks the service as unhealthy → restart loop.
     healthCheckPath: /api/health

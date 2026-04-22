@@ -1,0 +1,78 @@
+name: Rust Quality Gates
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-check:
+    name: Rust Quality Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy linting
+        run: cargo clippy --release -- -D warnings
+
+      - name: Build check
+        run: cargo build --release --bin brightsky
+
+      - name: Tests (if any exist)
+        run: cargo test --lib
+
+  pre-commit:
+    name: Pre-commit Hook
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Run pre-commit style checks
+        run: |
+          cargo fmt --all
+          cargo clippy --release -- -D warnings
+          cargo build --release --bin brightsky
+
+      - name: Check for formatting changes
+        run: |
+          if [ -n "$(git diff --name-only)" ]; then
+            echo "::error::Formatting changes detected. Run 'cargo fmt' locally."
+            git diff --stat
+            exit 1
+          fi
