@@ -12,16 +12,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-# Pre-build dependencies only (no source files yet)
-RUN cargo build --release && rm -rf src target/release/deps/brightsky*
-
-# Now copy source and build
 COPY main.rs ./
 COPY bss_*.rs ./
-RUN touch src/*.rs bss_*.rs 2>/dev/null || true
+
 RUN cargo build --release --bin brightsky-solver
 
-# ─── STAGE 2: Final Image ───────────────────────────────────��────────────────
+# ─── STAGE 2: Final Image ────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -32,14 +28,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy Rust solver binary
 COPY --from=builder /app/target/release/brightsky-solver ./brightsky
-
-# Copy pre-built API server dist files
 COPY artifacts/api-server/dist ./artifacts/api-server/dist
 COPY artifacts/api-server/package.json ./artifacts/api-server/package.json
 
-# Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
