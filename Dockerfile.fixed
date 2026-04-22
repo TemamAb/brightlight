@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1
+# BrightSky v2 Dockerfile – Audit Fixes
+FROM rust:1.88-slim AS builder
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl
