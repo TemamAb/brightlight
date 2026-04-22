@@ -3,7 +3,6 @@ node_modules/
 .env.local
 .env.production
 .env-data.md
-dist/
 artifacts/dist/
 *.log
 pnpm-debug.log*
@@ -13,5 +12,4 @@ pnpm-debug.log*
 build/
 .pnpm-store/node_modules/
 target/
-dist/
 .env

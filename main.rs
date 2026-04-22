@@ -1,6 +1,6 @@
 mod bss_04_graph;
 mod bss_05_sync;
-mod bss_13_solver;
+// BSS-13 Solver is implemented inline in run_watchtower() - no separate module needed
 
 use bss_04_graph::{GraphPersistence, PoolState};
 use serde::{Serialize, Deserialize};
@@ -17,6 +17,7 @@ type HmacSha256 = Hmac<Sha256>;
 use tokio::sync::{mpsc, watch, broadcast};
 use tokio::time::{sleep, timeout};
 /// BSS-26: The Watchtower Framework & Health Definitions
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HealthStatus {
     Optimal,
     Degraded(String),
@@ -1185,9 +1186,9 @@ async fn run_watchtower(
         Arc::new(PreflightSpecialist) as Arc<dyn SubsystemSpecialist>,
     ];
 
-    let mut last_insight_tick = 0;
+    let mut last_insight_tick: u64 = 0;
     loop {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or(0);
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
         
         // Handle incoming Debugging Orders from the user
         while let Ok(order) = debug_rx.try_recv() {
@@ -1415,7 +1416,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         while let Some((token_a, token_b, state)) = rx.recv().await {
             // BSS-04: Atomically update the persistent graph edge
-            persistence_graph.update_edge(&token_a, &token_b, state);
+            persistence_graph.update_edge(token_a, token_b, state);
             // BSS-13: Notify solver to wake up immediately
             persistence_trigger.notify_one();
         }

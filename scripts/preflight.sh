@@ -3,6 +3,25 @@ set -e
 
 echo "─── [BSS-38] PRE-FLIGHT INTEGRITY CHECK ───"
 
+# 0. BSS-39: Compilation Integrity Check (BEFORE anything else)
+# This specialist ensures the code compiles BEFORE deployment
+if [[ "$*" != *"migrate"* ]]; then
+    echo "─── [BSS-39] COMPILATION GUARD ───"
+    if command -v cargo &> /dev/null; then
+        echo "Running cargo build --release..."
+        if cargo build --release --bin brightsky 2>&1 | tee /tmp/cargo-output.log; then
+            echo "✓ [BSS-39] Rust Code Compiles Successfully"
+        else
+            echo "ERR: [BSS-39] COMPILATION FAILED"
+            echo "Last 20 lines of compilation errors:"
+            tail -20 /tmp/cargo-output.log
+            exit 1
+        fi
+    else
+        echo "WARN: cargo not installed - skipping compilation check"
+    fi
+fi
+
 # 1. Verify Critical Secrets (Context-Aware)
 if [[ "$*" == *"migrate"* ]]; then
     echo "INFO: Migration command detected. Relaxing validation to database only."
