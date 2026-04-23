@@ -24,14 +24,13 @@ router.get("/health", async (_req, res) => {
     // Audit Step 1: Check if the environment variable is actually present in the process
     const hasPrimaryDbUrl = !!process.env.DATABASE_URL;
     const hasAnyDbUrl = !!(
-      process.env.DATABASE_URL ||
-      process.env.DATABASE_CONNECTION_STRING
+      process.env.DATABASE_URL || process.env.DATABASE_CONNECTION_STRING
     );
     const hasPimlico = !!process.env.PIMLICO_API_KEY;
     const hasPrivateKey = !!process.env.PRIVATE_KEY;
     const hasRpc = !!process.env.RPC_ENDPOINT;
     const isStrict = process.env.PRE_FLIGHT_STRICT === "true";
-    
+
     // BSS-38: Validate IPC Bridge Connectivity
     const bridgePort = parseInt(process.env.INTERNAL_BRIDGE_PORT || "4001");
     const bridgeSocketPath =
@@ -57,26 +56,63 @@ router.get("/health", async (_req, res) => {
         });
 
     // Diagnostics: Check for common typos in the environment
-    const envKeys = Object.keys(process.env).filter(
-      k => k.toLowerCase().includes('database') || k.toLowerCase().includes('db_') || k.toLowerCase().includes('postgres')
-    ).sort();
+    const envKeys = Object.keys(process.env)
+      .filter(
+        (k) =>
+          k.toLowerCase().includes("database") ||
+          k.toLowerCase().includes("db_") ||
+          k.toLowerCase().includes("postgres"),
+      )
+      .sort();
 
     if (!hasPrimaryDbUrl || !hasPimlico || !hasPrivateKey || !hasRpc) {
-      console.warn("[health] Essential configuration missing for LIVE mode:", { 
-        hasPrimaryDbUrl, hasPimlico, hasPrivateKey, hasRpc, 
-        strictMode: isStrict, detectedKeys: envKeys 
+      console.warn("[health] Essential configuration missing for LIVE mode:", {
+        hasPrimaryDbUrl,
+        hasPimlico,
+        hasPrivateKey,
+        hasRpc,
+        strictMode: isStrict,
+        detectedKeys: envKeys,
       });
     }
 
-    if (!db) {
+    // Database connection with retry logic for cloud environments
+    let dbConnected = false;
+    let lastError = null;
+
+    // Try to connect to database with retries (important for cloud startup)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        if (db) {
+          await db.execute(sql`SELECT 1`);
+          dbConnected = true;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        // Don't log on first attempt to reduce noise, but log retries
+        if (attempt > 1) {
+          console.warn(
+            `[health] Database connection attempt ${attempt} failed:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+        // Wait before retry (except on last attempt)
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt)); // 1s, 2s delays
+        }
+      }
+    }
+
+    if (!dbConnected) {
       return res.status(503).json({
         status: "error",
-        db: "not_initialized",
+        db: "connection_failed",
         env_var_present: hasAnyDbUrl,
         bridge_alive: isBridgeAlive,
         bridge_socket_path: bridgeSocketPath,
         message: hasAnyDbUrl
-          ? "Database variable exists but client failed to initialize. Check @workspace/db logic."
+          ? `Database connection failed after 3 attempts. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`
           : "No database URL found in primary or fallback environment variables.",
         detected_env_keys: envKeys,
         rpc_configured: hasRpc,
@@ -85,8 +121,6 @@ router.get("/health", async (_req, res) => {
         timestamp: new Date().toISOString(),
       });
     }
-
-    await db.execute(sql`SELECT 1`);
     res.json({
       status: "ok",
       db: "connected",

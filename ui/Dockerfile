@@ -24,6 +24,6 @@ RUN pnpm --filter @workspace/brightsky run build
 FROM nginx:1.27-alpine
 
 COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist/public /usr/share/nginx/html
+COPY --from=builder /app/ui/dist/public /usr/share/nginx/html
 
 EXPOSE 80
