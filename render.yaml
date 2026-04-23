@@ -45,11 +45,11 @@ services:
       - key: PNPM_VERSION
         value: "9"
       - key: DATABASE_URL
-         fromDatabase:
-           name: brightsky-db
-           property: connectionString
+        fromDatabase:
+          name: brightsky-db
+          property: connectionString
       - key: PRE_FLIGHT_STRICT
-         value: "false"
+        value: "false"
       - key: INTERNAL_BRIDGE_PORT
         value: "4001"
       - key: SUDO_CONFIRMATION_ENABLED

@@ -1,6 +1,6 @@
 // BSS-45: Risk & Safety Engine
-use crate::bss_13_solver::ArbitrageOpportunity;
-use crate::bss_43_simulator::SimulationResult;
+use crate::subsystems::bss_13_solver::ArbitrageOpportunity;
+use crate::subsystems::bss_43_simulator::SimulationResult;
 use crate::HealthStatus;
 use crate::SystemPolicy;
 use crate::WatchtowerStats;
