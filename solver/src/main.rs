@@ -618,62 +618,6 @@ impl SubsystemSpecialist for SignalBacktester {
     }
 }
 
-pub struct RiskEngine;
-
-impl RiskEngine {
-    /// BSS-09 Elite: Probabilistic Expected Value (EV) Calculation
-    /// Evaluates if (Profit * P(Success)) - (GasLoss * P(Fail)) > Threshold
-    pub fn evaluate_expected_value(profit_eth: f64, gas_cost_eth: f64, p_success: f64) -> bool {
-        let ev = (profit_eth * p_success) - (gas_cost_eth * (1.0 - p_success));
-        // Elite Gate: Only proceed if EV is 20% higher than the raw gas cost to account for volatility
-        ev > (gas_cost_eth * 1.2)
-    }
-
-    /// Predicts success probability based on mempool congestion and bribe ratio
-    pub fn estimate_p_success(bribe_ratio: f64, network_congestion: f64) -> f64 {
-        let base_p = 0.95;
-        let congestion_penalty = network_congestion * 0.1;
-        (base_p - congestion_penalty + (bribe_ratio * 0.05)).clamp(0.1, 0.99)
-    }
-
-    pub fn validate(
-        opportunity: &subsystems::ArbitrageOpportunity,
-        simulation: &subsystems::SimulationResult,
-        policy: &SystemPolicy,
-        stats: &WatchtowerStats,
-    ) -> bool {
-        if !simulation.success {
-            return false;
-        }
-
-        let hop_count = opportunity.path.len().saturating_sub(1);
-        if hop_count == 0 || hop_count > policy.max_hops {
-            return false;
-        }
-
-        let bribe_ratio = 0.0;
-        let network_congestion = if TARGET_THROUGHPUT == 0 {
-            0.0
-        } else {
-            (stats.mempool_events_per_sec.load(Ordering::Relaxed) as f64 / TARGET_THROUGHPUT as f64)
-                .clamp(0.0, 1.0)
-        };
-        let p_success = Self::estimate_p_success(bribe_ratio, network_congestion);
-        let gross_bps = if simulation.gas_estimate_eth > 0.0 {
-            (simulation.profit_eth / simulation.gas_estimate_eth) * 10_000.0
-        } else {
-            simulation.profit_eth * 10_000.0
-        };
-
-        gross_bps >= policy.min_profit_bps
-            && Self::evaluate_expected_value(
-                simulation.profit_eth,
-                simulation.gas_estimate_eth,
-                p_success,
-            )
-    }
-}
-
 /// BSS-10: Margin Guard
 /// Real-time spread validation against the global SystemPolicy.
 pub struct MarginGuard {
@@ -1712,7 +1656,8 @@ async fn run_watchtower(
         Arc::new(CircuitBreakerSpecialist {
             stats: Arc::clone(&stats),
         }) as Arc<dyn SubsystemSpecialist>,
-        Arc::new(subsystems::RiskSpecialist {
+        // BSS-45: Now correctly sourced from subsystems module
+        Arc::new(RiskSpecialist {
             stats: Arc::clone(&stats),
         }) as Arc<dyn SubsystemSpecialist>,
         Arc::new(MarginGuard {
