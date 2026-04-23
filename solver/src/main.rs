@@ -1345,10 +1345,7 @@ async fn run_api_gateway(
             tokio::net::UnixListener::bind(&socket_path).expect("[BSS-06] UDS socket active");
         std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600))
             .expect("[BSS-06] Failed to set socket permissions");
-        println!(
-            "[BSS-06] Telemetry Gateway active on UDS: {} (Protected)",
-            socket_path
-        );
+        println!("[BSS-06] Telemetry Gateway active on UDS: {socket_path} (Protected)");
 
         loop {
             if let Ok((socket, _)) = listener.accept().await {
