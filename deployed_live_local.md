@@ -306,6 +306,70 @@ Profit:  ETH | Trades:  | Success: %
 
 ---
 
+## Environment Variables in `.env` (42 Valid Variables)
+
+| #   | Variable Name              | Purpose                          |
+| --- | -------------------------- | -------------------------------- |
+| 1   | NODE_ENV                   | Runtime environment (production) |
+| 2   | PORT                       | API server port (3000)           |
+| 3   | NODE_VERSION               | Node.js version (22.12.0)        |
+| 4   | PNPM_VERSION               | pnpm version (9)                 |
+| 5   | DASHBOARD_USER             | UI login username                |
+| 6   | DASHBOARD_PASS             | UI login password (HMAC secret)  |
+| 7   | SESSION_SECRET             | Session encryption key           |
+| 8   | REDIS_URL                  | Redis cache connection           |
+| 9   | DATABASE_URL               | Primary PostgreSQL connection    |
+| 10  | DATABASE_URL_FALLBACK      | Backup DB connection             |
+| 11  | GEMINI_API_KEY             | Google Gemini AI                 |
+| 12  | GOOGLE_AI_STUDIO           | Google AI Studio access          |
+| 13  | OPENAI_API_KEY             | OpenAI GPT-4 API                 |
+| 14  | PIMLICO_API_KEY            | Pimlico bundler API key          |
+| 15  | PIMLICO_NETWORK            | Pimlico network (base)           |
+| 16  | PIMLICO_BUNDLER_URL        | Pimlico bundler endpoint         |
+| 17  | ENTRYPOINT_ADDR            | ERC-4337 entry point address     |
+| 18  | WALLET_ADDRESS             | Signer wallet address            |
+| 19  | PRIVATE_KEY                | Signer private key (for AA)      |
+| 20  | DEPLOYER_ADDRESS           | Contract deployer address        |
+| 21  | FLASHLOAN_CONTRACT_ADDRESS | Flashloan executor contract      |
+| 22  | CHAIN_ID                   | Blockchain ID (8453 = Base)      |
+| 23  | PAPER_TRADING_MODE         | Simulate only vs real execution  |
+| 24  | MEV_PROTECTION             | Enable MEV guard (true/false)    |
+| 25  | SCAN_CONCURRENCY           | Concurrent RPC scans (8)         |
+| 26  | MAX_PAIRS_TO_SCAN          | Max token pairs to scan (2500)   |
+| 27  | FLASH_LOAN_MAX             | Max flashloan amount             |
+| 28  | RPC_ENDPOINT               | Primary Base RPC URL             |
+| 29  | ETH_RPC_URL                | Ethereum mainnet RPC             |
+| 30  | BASE_RPC_URL               | Base chain RPC                   |
+| 31  | POLYGON_RPC_URL            | Polygon RPC                      |
+| 32  | SOLANA_RPC_URL             | Solana RPC                       |
+| 33  | BSC_RPC_URL                | BSC RPC                          |
+| 34  | ARBITRUM_RPC_URL           | Arbitrum RPC                     |
+| 35  | OPTIMISM_RPC_URL           | Optimism RPC                     |
+| 36  | AVALANCHE_RPC_URL          | Avalanche RPC                    |
+| 37  | ALCHEMY_RPC_URL            | Alchemy RPC                      |
+| 38  | ALCHEMY_WCC_UPC            | Alchemy Web3CLI                  |
+| 39  | ONFINITY_rpc_url           | Onfinity RPC                     |
+| 40  | ONFINITY_WCC_UPC           | Onfinity Web3CLI                 |
+| 41  | ANKR_RPC_URL               | Ankr RPC                         |
+| 42  | BICONOMY_API_KEY           | Biconomy gasless API             |
+| 43  | BICONOMY_PROJECT_ID        | Biconomy project ID              |
+
+**Verification Commands:**
+
+```powershell
+# Check all 42 variables loaded
+Get-Content .env | Where-Object { $_ -match '^[^#=]+=.+$' } | Measure-Object | Select-Object Count
+
+# Check critical variables
+Write-Host "RPC: $($env:RPC_ENDPOINT -replace ':[^/@]+@', ':****@')"
+Write-Host "Chain: $env:CHAIN_ID (8453=Base)"
+Write-Host "Pimlico: $($env:PIMLICO_BUNDLER_URL -ne '')"
+Write-Host "Wallet: $env:WALLET_ADDRESS"
+Write-Host "Paper Trading: $env:PAPER_TRADING_MODE"
+```
+
+---
+
 ## 🚫 ALL Things BLOCKING Profit Generation
 
 ### Tier 1: CRITICAL (Must fix immediately - nothing works without these)
