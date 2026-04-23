@@ -1472,9 +1472,9 @@ async fn handle_gateway_connection<S>(
         ("200 OK", data)
     };
 
-     let response = format!(
-          "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n{report}"
-      );
+    let response = format!(
+         "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n{report}"
+     );
     let _ = socket.write_all(response.as_bytes()).await;
 }
 
@@ -1797,9 +1797,7 @@ async fn run_watchtower(
             match specialist.check_health() {
                 HealthStatus::Degraded(msg) if specialist.subsystem_id() == "BSS-38" => {
                     // BSS-38 Workflow Integration: If pre-flight is degraded, force Shadow Mode.
-                    println!(
-                         "[BSS-26] PRE-FLIGHT WARNING: {msg}. Forcing Shadow Mode for safety."
-                    );
+                    println!("[BSS-26] PRE-FLIGHT WARNING: {msg}. Forcing Shadow Mode for safety.");
                     current_policy.shadow_mode = true;
                     stats.is_shadow_mode_active.store(true, Ordering::SeqCst);
                     _degraded_flag = true;
@@ -1851,10 +1849,7 @@ async fn run_watchtower(
         // 3. Performance Remediation: Detect Solver Jitter (BSS-13)
         let jitter = stats.solver_jitter_ms.load(Ordering::Relaxed);
         if jitter > 100 {
-            println!(
-                "[BSS-26] Solver jitter detected ({}ms). Reducing graph complexity.",
-                jitter
-            );
+            println!("[BSS-26] Solver jitter detected ({jitter}ms). Reducing graph complexity.");
             current_policy.max_hops = 2;
             _degraded_flag = true;
         }
@@ -2117,7 +2112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let oracle_profit = (opp.log_weight.abs().exp() - 1.0) * (optimal_wei as f64 / 1e18);
                          let delta = (sim_result.profit_eth - oracle_profit).abs();
                          if delta > (oracle_profit * 0.2) {
-                            println!("[BSS-45] REJECTION: Simulation anomaly. Delta: {} ETH", delta);
+                             println!("[BSS-45] REJECTION: Simulation anomaly. Delta: {delta} ETH");
                             solver_stats.signals_rejected_risk.fetch_add(1, Ordering::Relaxed);
                             continue;
                         }
